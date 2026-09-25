@@ -35,7 +35,7 @@ public static class IdentityEndpoints
 
             await signInManager.SignInAsync(user, isPersistent: false);
             return Results.Redirect("/");
-        }).DisableAntiforgery();
+        });
 
         app.MapPost("/account/login", async (
             [FromForm] string email,
@@ -49,12 +49,12 @@ public static class IdentityEndpoints
             return result.Succeeded
                 ? Results.Redirect("/")
                 : Results.Redirect("/account/login?error=1");
-        }).DisableAntiforgery();
+        });
 
         app.MapPost("/account/logout", async (SignInManager<ApplicationUser> signInManager) =>
         {
             await signInManager.SignOutAsync();
             return Results.Redirect("/");
-        }).DisableAntiforgery();
+        });
     }
 }
