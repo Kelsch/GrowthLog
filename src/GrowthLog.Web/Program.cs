@@ -49,7 +49,6 @@ builder.Services.AddScoped<FamilyMembershipRepository>();
 builder.Services.AddScoped<PersonFamilyMembershipRepository>();
 builder.Services.AddScoped<AuditRepository>();
 builder.Services.AddScoped<FamilyAuthorizationService>();
-builder.Services.AddScoped<FamilyAuthorizationService>();
 
 var app = builder.Build();
 
