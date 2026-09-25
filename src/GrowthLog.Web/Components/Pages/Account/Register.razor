@@ -1,5 +1,7 @@
 @page "/account/register"
 @layout AccountLayout
+@rendermode InteractiveServer
+
 @inject UserManager<ApplicationUser> UserManager
 @inject SignInManager<ApplicationUser> SignInManager
 @inject NavigationManager Nav
@@ -13,7 +15,7 @@
     <div class="alert alert-danger">@_error</div>
 }
 
-<EditForm Model="_model" OnValidSubmit="HandleRegister">
+<EditForm FormName="registerForm" Model="_model" OnValidSubmit="HandleRegister">
     <DataAnnotationsValidator />
     <ValidationSummary />
 
