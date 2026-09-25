@@ -10,8 +10,9 @@ intentionally implementation-free. Code will follow in later phases.
 
 ## 1. Guiding Principles
 
-1. **Dapper is the only application data-access technology.** No EF Core, no
-   ORM abstractions that hide SQL.
+1. **Dapper + plain SQL is the only application data-access technology.** No
+   EF Core, no ORM abstractions that hide SQL. Every query is hand-written,
+   parameterized SQL executed through Dapper.
 2. **Authorization is enforced server-side**, in the data-access layer, not in
    Blazor components.
 3. **Queries are authorization-aware.** We never fetch unauthorized rows and
@@ -34,9 +35,10 @@ intentionally implementation-free. Code will follow in later phases.
 | Entity | Purpose |
 | --- | --- |
 | `ApplicationUser` | An authenticated account (ASP.NET Core Identity). |
-| `Family` | A household. Owns people, memberships, and sharing rules. |
+| `Family` | A household. Owns memberships, people, and sharing rules. |
 | `FamilyMembership` | Links a `User` to a `Family` with a role. |
 | `Person` | A human whose growth is tracked. May or may not have a user account. |
+| `PersonFamilyMembership` | Links a `Person` to a `Family`. A person may belong to many families. |
 | `PersonRelationship` | Directed relationship between two `Person` rows (parent/child/spouse/sibling). |
 | `Measurement` | A dated height/weight record for a `Person`. |
 | `FamilyConnection` | A directed link between two `Family` rows (e.g. "my parents"). |
@@ -50,9 +52,17 @@ intentionally implementation-free. Code will follow in later phases.
   account. They are linked optionally via `Person.UserId` (nullable). This lets
   us track children who have no account, and lets an adult user be linked to
   their own `Person` row.
-- **Family is the unit of ownership and sharing.** People belong to exactly one
-  family (their household). Sharing is expressed family-to-family, not
-  person-to-person, which keeps the permission model tractable.
+- **A Person may belong to multiple Families.** Membership is modeled by a
+  `PersonFamilyMembership` join table, not a `FamilyId` column on `Person`.
+  This is required from v1: an adult typically belongs both to the family they
+  grew up in (their parents' household) and to the family they created with
+  their spouse and children. A person's measurements are a single historical
+  record; the families they belong to determine who may see them.
+- **Family is the unit of ownership and sharing.** Sharing is expressed
+  family-to-family, not person-to-person, which keeps the permission model
+  tractable. A person who belongs to two families is visible to both by
+  default (subject to role), and each family independently controls what it
+  shares outward.
 - **Relationships are explicit and directed.** `PersonRelationship` stores
   `(FromPersonId, ToPersonId, RelationshipType)`. We store the minimal set
   (parent→child, spouse↔spouse) and derive grandparents, grandchildren, and
@@ -77,7 +87,31 @@ Initial enum values (stored as a lookup table or constrained string):
 Grandparent / grandchild / aunt / uncle / cousin are **derived** by traversing
 `Parent` edges. This keeps the schema small and future-proof.
 
-### 2.4 Measurement Model
+### 2.4 Person–Family Membership
+
+A `PersonFamilyMembership` row contains:
+
+- `Id`
+- `PersonId`
+- `FamilyId`
+- `MembershipKind` — `Adult` | `Child` (whether this person is treated as a
+  dependent of this family for sharing purposes)
+- `JoinedUtc`
+- `IsActive` (soft removal from a family without deleting the person)
+
+Rules:
+
+- A person may have zero or more memberships. A person with no active
+  membership is effectively orphaned and should not appear in any family view.
+- `MembershipKind` is per-family. The same person can be an `Adult` in their
+  parents' family and an `Adult` in their own family, or a `Child` in one and
+  an `Adult` in another (e.g. a young adult still listed as a dependent).
+- The `IsChild` concept used by the sharing model is derived from
+  `PersonFamilyMembership.MembershipKind` **for the family being shared**, not
+  from a global flag on `Person`. This is what makes multi-family people work
+  cleanly: "child of the source family" is a per-family property.
+
+### 2.5 Measurement Model
 
 A `Measurement` row contains:
 
@@ -109,18 +143,26 @@ handling leap years and exact birthday boundaries.
 This is answered by a single authorization service backed by SQL. The answer
 is derived from:
 
-1. **Ownership:** U is a member of P's family → yes (subject to role).
-2. **Parental rule:** U is a parent of P (via `PersonRelationship`) → yes.
-3. **Explicit sharing:** U's family has a `FamilyConnection` from P's family,
-   and a `SharingPermission` grants visibility of P (or a category P belongs
-   to, e.g. "children of the source family").
+1. **Ownership:** U is a member of *any* family that P belongs to → yes
+   (subject to role). Because P may belong to several families, this rule is
+   evaluated per membership, not against a single `FamilyId`.
+2. **Parental rule:** U is a parent of P (via `PersonRelationship`) → yes,
+   regardless of family membership. A parent always sees their own child.
+3. **Explicit sharing:** U's family has a `FamilyConnection` from a family
+   that P belongs to, and a `SharingPermission` grants visibility of P (or a
+   category P belongs to, e.g. "children of the source family"). The category
+   check uses `PersonFamilyMembership.MembershipKind` **for the source
+   family**, so a person who is a child in one family and an adult in another
+   is classified correctly per connection.
 
 ### 3.2 Permission Kinds
 
 `SharingPermission.PermissionKind` is an extensible string/enum. Initial values:
 
-- `ViewChildren` — the receiving family may see the source family's children.
-- `ViewAdults` — the receiving family may see the source family's adult members.
+- `ViewChildren` — the receiving family may see people who are `Child`
+  members of the source family.
+- `ViewAdults` — the receiving family may see people who are `Adult` members
+  of the source family.
 - `ViewAll` — shorthand for both (future convenience).
 
 The schema stores one row per granted kind, so adding `ViewPhotos` or
@@ -147,15 +189,16 @@ not final SQL):
 
 ```sql
 WITH VisiblePeople AS (
-    -- Own family
-    SELECT p.Id
-    FROM People p
-    JOIN FamilyMemberships fm ON fm.FamilyId = p.FamilyId
+    -- Own families: any family the user is a member of
+    SELECT pfm.PersonId AS PersonId
+    FROM PersonFamilyMembership pfm
+    JOIN FamilyMembership fm ON fm.FamilyId = pfm.FamilyId
     WHERE fm.UserId = @UserId
+      AND pfm.IsActive = 1
 
     UNION
 
-    -- Own children (parental rule)
+    -- Own children (parental rule, independent of family membership)
     SELECT r.ToPersonId
     FROM PersonRelationship r
     JOIN People parent ON parent.Id = r.FromPersonId
@@ -164,23 +207,27 @@ WITH VisiblePeople AS (
 
     UNION
 
-    -- Explicitly shared via family connection + permission
-    SELECT p.Id
-    FROM People p
-    JOIN FamilyConnection fc ON fc.SourceFamilyId = p.FamilyId
+    -- Explicitly shared via family connection + permission.
+    -- The category check uses the person's membership kind in the SOURCE
+    -- family, so multi-family people are classified per connection.
+    SELECT pfm.PersonId
+    FROM PersonFamilyMembership pfm
+    JOIN FamilyConnection fc ON fc.SourceFamilyId = pfm.FamilyId
     JOIN SharingPermission sp ON sp.FamilyConnectionId = fc.Id
-    JOIN FamilyMemberships fm ON fm.FamilyId = fc.TargetFamilyId
+    JOIN FamilyMembership fm ON fm.FamilyId = fc.TargetFamilyId
     WHERE fm.UserId = @UserId
+      AND pfm.IsActive = 1
+      AND fc.IsActive = 1
       AND sp.IsGranted = 1
       AND (
-            (sp.PermissionKind = 'ViewChildren' AND p.IsChild = 1)
-         OR (sp.PermissionKind = 'ViewAdults'   AND p.IsChild = 0)
+            (sp.PermissionKind = 'ViewChildren' AND pfm.MembershipKind = 'Child')
+         OR (sp.PermissionKind = 'ViewAdults'   AND pfm.MembershipKind = 'Adult')
          OR (sp.PermissionKind = 'ViewAll')
       )
 )
 SELECT ...
 FROM Measurements m
-JOIN VisiblePeople vp ON vp.Id = m.PersonId
+JOIN VisiblePeople vp ON vp.PersonId = m.PersonId
 WHERE m.IsDeleted = 0;
 ```
 
@@ -192,8 +239,11 @@ person, age range) are applied **on top of** this CTE, never instead of it.
 Every mutation (insert/update/delete measurement, change sharing, accept
 invitation) re-checks authorization server-side:
 
-- **Create/update/delete measurement:** user must be a member of the person's
-  family with role `Owner` or `Adult`, **or** be the person's linked user.
+- **Create/update/delete measurement:** user must be a member of *any* family
+  the person belongs to with role `Owner` or `Adult`, **or** be the person's
+  linked user. Because a person may belong to several families, the check is
+  "does the user hold a mutating role in at least one of the person's active
+  families?"
 - **Change sharing:** user must be `Owner` of the source family.
 - **Accept invitation:** token must be valid, unexpired, and unconsumed.
 
@@ -206,146 +256,191 @@ person's family and checks membership.
 
 - `Owner` — full control, including sharing and membership.
 - `Adult` — can manage people and measurements in the family.
-- `Viewer` — read-only (future; useful for e.g. a grandparent account that is
-  a member of the grandparent family but only views).
+- `Viewer` — read-only. Can see the family's data (subject to sharing rules)
+  but cannot create, edit, or delete people or measurements, and cannot change
+  sharing.
 
-Roles are per-family. A user may be `Owner` of one family and `Viewer` of
-another.
+All three roles are implemented in v1. Roles are per-family. A user may be
+`Owner` of one family and `Viewer` of another.
 
 ---
 
 ## 4. Database Schema
 
-Target: SQL Server (default for ASP.NET Core Identity on Windows). The schema
-is written in portable SQL where practical so it can be adapted to PostgreSQL
-or SQLite for tests.
+**Target database: SQLite** for local development and the default self-hosted
+deployment (Docker or Linux LXC). The schema is written in portable SQL so it
+also runs on **PostgreSQL** with minimal changes. No SQL Server-specific types
+are used.
+
+Portability rules:
+
+- Use `TEXT` for identifiers (UUIDs stored as canonical lowercase strings) and
+  for all string columns. SQLite has no native `UNIQUEIDENTIFIER`; PostgreSQL
+  can store the same values in `uuid` or `text` without changing the
+  application.
+- Use `TEXT` in ISO-8601 (`YYYY-MM-DDTHH:MM:SSZ`) for timestamps and
+  `YYYY-MM-DD` for dates. This is unambiguous in both engines and avoids
+  SQLite's lack of a native date type.
+- Use `INTEGER` for booleans (`0`/`1`). SQLite has no `BIT`; PostgreSQL can
+  map the same values to `boolean` if desired.
+- Use `REAL` or `NUMERIC` for measurements. Store canonical metric values
+  (centimeters, kilograms) as `NUMERIC` where the engine supports it, and
+  `REAL` on SQLite. The application rounds for display only.
+- Use `INTEGER PRIMARY KEY AUTOINCREMENT` for the audit log's surrogate key on
+  SQLite; PostgreSQL uses `BIGSERIAL`. This is the only place a surrogate
+  integer key is used.
+- Enforce referential integrity with `FOREIGN KEY` constraints and enable
+  `PRAGMA foreign_keys = ON` on SQLite connections.
+- Enforce uniqueness and `CHECK` constraints in SQL; do not rely on
+  application code alone.
+
+The schema below is an **outline**, not final DDL. Column types are described
+in portable terms; the migration scripts will translate them per engine.
 
 ### 4.1 Identity Tables
 
 Standard ASP.NET Core Identity tables (`AspNetUsers`, `AspNetRoles`,
 `AspNetUserRoles`, `AspNetUserClaims`, `AspNetUserLogins`, `AspNetUserTokens`,
 `AspNetRoleClaims`). Created by the Identity migration script, not by hand.
+Identity's own data access is the one place EF Core is permitted, because it
+ships with ASP.NET Core Identity; all GrowthLog application data access uses
+Dapper.
 
 `ApplicationUser` extends `IdentityUser` with:
 
-- `DisplayName` (nvarchar(100))
-- `PreferredUnitSystem` (nvarchar(10), `Imperial` | `Metric`)
-- `CreatedUtc`
+- `DisplayName` (text, 100)
+- `PreferredUnitSystem` (text, 10; `Imperial` | `Metric`)
+- `CreatedUtc` (text, ISO-8601)
 
-### 4.2 Application Tables
+### 4.2 Application Tables (outline)
 
-```sql
-CREATE TABLE Families (
-    Id            UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
-    Name          NVARCHAR(100)    NOT NULL,
-    CreatedUtc    DATETIME2        NOT NULL,
-    IsDeleted     BIT              NOT NULL DEFAULT 0
-);
+Each table below lists its columns, keys, and constraints in portable terms.
+The migration scripts will emit engine-specific DDL.
 
-CREATE TABLE FamilyMemberships (
-    Id            UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
-    FamilyId      UNIQUEIDENTIFIER NOT NULL REFERENCES Families(Id),
-    UserId        NVARCHAR(450)    NOT NULL REFERENCES AspNetUsers(Id),
-    Role          NVARCHAR(20)     NOT NULL,  -- Owner | Adult | Viewer
-    JoinedUtc     DATETIME2        NOT NULL,
-    CONSTRAINT UQ_FamilyMemberships_Family_User UNIQUE (FamilyId, UserId)
-);
-CREATE INDEX IX_FamilyMemberships_UserId ON FamilyMemberships(UserId);
-CREATE INDEX IX_FamilyMemberships_FamilyId ON FamilyMemberships(FamilyId);
+**Families**
 
-CREATE TABLE People (
-    Id            UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
-    FamilyId      UNIQUEIDENTIFIER NOT NULL REFERENCES Families(Id),
-    UserId        NVARCHAR(450)    NULL REFERENCES AspNetUsers(Id),
-    FirstName     NVARCHAR(100)    NOT NULL,
-    LastName      NVARCHAR(100)    NULL,
-    DateOfBirth   DATE             NOT NULL,
-    IsChild       BIT              NOT NULL DEFAULT 1,
-    AvatarUrl     NVARCHAR(500)    NULL,
-    CreatedUtc    DATETIME2        NOT NULL,
-    IsDeleted     BIT              NOT NULL DEFAULT 0
-);
-CREATE INDEX IX_People_FamilyId ON People(FamilyId);
-CREATE INDEX IX_People_UserId   ON People(UserId);
+- `Id` — text UUID, primary key
+- `Name` — text(100), not null
+- `CreatedUtc` — text ISO-8601, not null
+- `IsDeleted` — integer 0/1, not null, default 0
 
-CREATE TABLE PersonRelationships (
-    Id                UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
-    FromPersonId      UNIQUEIDENTIFIER NOT NULL REFERENCES People(Id),
-    ToPersonId        UNIQUEIDENTIFIER NOT NULL REFERENCES People(Id),
-    RelationshipType  NVARCHAR(20)     NOT NULL,  -- Parent | Spouse
-    CreatedUtc        DATETIME2        NOT NULL,
-    CONSTRAINT CK_PersonRelationships_NoSelf CHECK (FromPersonId <> ToPersonId),
-    CONSTRAINT UQ_PersonRelationships UNIQUE (FromPersonId, ToPersonId, RelationshipType)
-);
-CREATE INDEX IX_PersonRelationships_From ON PersonRelationships(FromPersonId);
-CREATE INDEX IX_PersonRelationships_To   ON PersonRelationships(ToPersonId);
+**FamilyMemberships** (user ↔ family, with role)
 
-CREATE TABLE Measurements (
-    Id               UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
-    PersonId         UNIQUEIDENTIFIER NOT NULL REFERENCES People(Id),
-    MeasurementDate  DATE             NOT NULL,
-    HeightCm         DECIMAL(6,2)     NULL,
-    WeightKg         DECIMAL(6,3)     NULL,
-    Notes            NVARCHAR(1000)   NULL,
-    EnteredByUserId  NVARCHAR(450)    NOT NULL REFERENCES AspNetUsers(Id),
-    CreatedUtc       DATETIME2        NOT NULL,
-    ModifiedUtc      DATETIME2        NULL,
-    IsDeleted        BIT              NOT NULL DEFAULT 0,
-    CONSTRAINT CK_Measurements_HasValue CHECK (HeightCm IS NOT NULL OR WeightKg IS NOT NULL)
-);
-CREATE INDEX IX_Measurements_Person_Date ON Measurements(PersonId, MeasurementDate);
+- `Id` — text UUID, primary key
+- `FamilyId` — text UUID, FK → Families(Id)
+- `UserId` — text, FK → AspNetUsers(Id)
+- `Role` — text(20), not null; `Owner` | `Adult` | `Viewer`
+- `JoinedUtc` — text ISO-8601, not null
+- Unique: `(FamilyId, UserId)`
+- Indexes: `UserId`, `FamilyId`
 
-CREATE TABLE FamilyConnections (
-    Id              UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
-    SourceFamilyId  UNIQUEIDENTIFIER NOT NULL REFERENCES Families(Id),
-    TargetFamilyId  UNIQUEIDENTIFIER NOT NULL REFERENCES Families(Id),
-    Label           NVARCHAR(100)    NULL,  -- e.g. "My Parents"
-    CreatedUtc      DATETIME2        NOT NULL,
-    IsActive        BIT              NOT NULL DEFAULT 1,
-    CONSTRAINT CK_FamilyConnections_NoSelf CHECK (SourceFamilyId <> TargetFamilyId),
-    CONSTRAINT UQ_FamilyConnections UNIQUE (SourceFamilyId, TargetFamilyId)
-);
-CREATE INDEX IX_FamilyConnections_Target ON FamilyConnections(TargetFamilyId);
+**People** (a human whose growth is tracked)
 
-CREATE TABLE SharingPermissions (
-    Id                  UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
-    FamilyConnectionId  UNIQUEIDENTIFIER NOT NULL REFERENCES FamilyConnections(Id),
-    PermissionKind      NVARCHAR(40)     NOT NULL,  -- ViewChildren | ViewAdults | ViewAll
-    IsGranted           BIT              NOT NULL DEFAULT 0,
-    UpdatedUtc          DATETIME2        NOT NULL,
-    UpdatedByUserId     NVARCHAR(450)    NOT NULL REFERENCES AspNetUsers(Id),
-    CONSTRAINT UQ_SharingPermissions UNIQUE (FamilyConnectionId, PermissionKind)
-);
+- `Id` — text UUID, primary key
+- `UserId` — text, nullable, FK → AspNetUsers(Id)
+- `FirstName` — text(100), not null
+- `LastName` — text(100), nullable
+- `DateOfBirth` — text `YYYY-MM-DD`, not null
+- `AvatarUrl` — text(500), nullable
+- `CreatedUtc` — text ISO-8601, not null
+- `IsDeleted` — integer 0/1, not null, default 0
+- Index: `UserId`
+- Note: **no `FamilyId` column.** Family membership lives in
+  `PersonFamilyMembership`.
 
-CREATE TABLE Invitations (
-    Id                UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
-    Token             NVARCHAR(128)    NOT NULL,  -- cryptographically random
-    InvitedEmail      NVARCHAR(256)    NULL,
-    InvitedByUserId   NVARCHAR(450)    NOT NULL REFERENCES AspNetUsers(Id),
-    TargetFamilyId    UNIQUEIDENTIFIER NOT NULL REFERENCES Families(Id),
-    IntendedRole      NVARCHAR(20)     NOT NULL,
-    IntendedPermission NVARCHAR(40)    NULL,
-    Status            NVARCHAR(20)     NOT NULL,  -- Pending | Accepted | Rejected | Expired
-    CreatedUtc        DATETIME2        NOT NULL,
-    ExpiresUtc        DATETIME2        NOT NULL,
-    AcceptedUtc       DATETIME2        NULL,
-    AcceptedByUserId  NVARCHAR(450)    NULL REFERENCES AspNetUsers(Id),
-    CONSTRAINT UQ_Invitations_Token UNIQUE (Token)
-);
-CREATE INDEX IX_Invitations_Status_Expires ON Invitations(Status, ExpiresUtc);
+**PersonFamilyMembership** (person ↔ family, many-to-many)
 
-CREATE TABLE AuditLog (
-    Id            BIGINT IDENTITY PRIMARY KEY,
-    OccurredUtc   DATETIME2        NOT NULL,
-    UserId        NVARCHAR(450)    NULL REFERENCES AspNetUsers(Id),
-    Action        NVARCHAR(60)     NOT NULL,  -- MeasurementCreated, SharingChanged, ...
-    EntityType    NVARCHAR(60)     NOT NULL,
-    EntityId      NVARCHAR(64)     NOT NULL,
-    DetailsJson   NVARCHAR(MAX)    NULL
-);
-CREATE INDEX IX_AuditLog_Entity ON AuditLog(EntityType, EntityId);
-CREATE INDEX IX_AuditLog_User   ON AuditLog(UserId, OccurredUtc);
-```
+- `Id` — text UUID, primary key
+- `PersonId` — text UUID, FK → People(Id)
+- `FamilyId` — text UUID, FK → Families(Id)
+- `MembershipKind` — text(10), not null; `Adult` | `Child`
+- `JoinedUtc` — text ISO-8601, not null
+- `IsActive` — integer 0/1, not null, default 1
+- Unique: `(PersonId, FamilyId)`
+- Indexes: `PersonId`, `FamilyId`, `(FamilyId, MembershipKind)`
+- This is the table that makes multi-family people work. The sharing model's
+  "child of the source family" check reads `MembershipKind` here, scoped to the
+  source family.
+
+**PersonRelationships** (directed person ↔ person)
+
+- `Id` — text UUID, primary key
+- `FromPersonId` — text UUID, FK → People(Id)
+- `ToPersonId` — text UUID, FK → People(Id)
+- `RelationshipType` — text(20), not null; `Parent` | `Spouse`
+- `CreatedUtc` — text ISO-8601, not null
+- Check: `FromPersonId <> ToPersonId`
+- Unique: `(FromPersonId, ToPersonId, RelationshipType)`
+- Indexes: `FromPersonId`, `ToPersonId`
+
+**Measurements**
+
+- `Id` — text UUID, primary key
+- `PersonId` — text UUID, FK → People(Id)
+- `MeasurementDate` — text `YYYY-MM-DD`, not null
+- `HeightCm` — numeric, nullable
+- `WeightKg` — numeric, nullable
+- `Notes` — text(1000), nullable
+- `EnteredByUserId` — text, FK → AspNetUsers(Id)
+- `CreatedUtc` — text ISO-8601, not null
+- `ModifiedUtc` — text ISO-8601, nullable
+- `IsDeleted` — integer 0/1, not null, default 0
+- Check: `HeightCm IS NOT NULL OR WeightKg IS NOT NULL`
+- Index: `(PersonId, MeasurementDate)`
+
+**FamilyConnections** (directed family ↔ family)
+
+- `Id` — text UUID, primary key
+- `SourceFamilyId` — text UUID, FK → Families(Id)
+- `TargetFamilyId` — text UUID, FK → Families(Id)
+- `Label` — text(100), nullable; e.g. "My Parents"
+- `CreatedUtc` — text ISO-8601, not null
+- `IsActive` — integer 0/1, not null, default 1
+- Check: `SourceFamilyId <> TargetFamilyId`
+- Unique: `(SourceFamilyId, TargetFamilyId)`
+- Index: `TargetFamilyId`
+
+**SharingPermissions**
+
+- `Id` — text UUID, primary key
+- `FamilyConnectionId` — text UUID, FK → FamilyConnections(Id)
+- `PermissionKind` — text(40), not null; `ViewChildren` | `ViewAdults` | `ViewAll`
+- `IsGranted` — integer 0/1, not null, default 0
+- `UpdatedUtc` — text ISO-8601, not null
+- `UpdatedByUserId` — text, FK → AspNetUsers(Id)
+- Unique: `(FamilyConnectionId, PermissionKind)`
+
+**Invitations**
+
+- `Id` — text UUID, primary key
+- `Token` — text(128), not null, unique; cryptographically random
+- `InvitedEmail` — text(256), nullable
+- `InvitedByUserId` — text, FK → AspNetUsers(Id)
+- `TargetFamilyId` — text UUID, FK → Families(Id)
+- `IntendedRole` — text(20), not null
+- `IntendedPermission` — text(40), nullable
+- `Status` — text(20), not null; `Pending` | `Accepted` | `Rejected` | `Expired`
+- `CreatedUtc` — text ISO-8601, not null
+- `ExpiresUtc` — text ISO-8601, not null
+- `AcceptedUtc` — text ISO-8601, nullable
+- `AcceptedByUserId` — text, nullable, FK → AspNetUsers(Id)
+- Unique: `Token`
+- Index: `(Status, ExpiresUtc)`
+- **v1 stores the token in plaintext.** This is a deliberate simplification.
+  A future hardening pass should store only a hash of the token and compare
+  hashes on redemption; the column is sized to accommodate a hash without a
+  schema change.
+
+**AuditLog** (append-only)
+
+- `Id` — integer surrogate key, auto-increment
+- `OccurredUtc` — text ISO-8601, not null
+- `UserId` — text, nullable, FK → AspNetUsers(Id)
+- `Action` — text(60), not null; e.g. `MeasurementCreated`, `SharingChanged`
+- `EntityType` — text(60), not null
+- `EntityId` — text(64), not null
+- `DetailsJson` — text, nullable
+- Indexes: `(EntityType, EntityId)`, `(UserId, OccurredUtc)`
 
 ### 4.3 Indexes Justified by Query Patterns
 
@@ -354,7 +449,9 @@ CREATE INDEX IX_AuditLog_User   ON AuditLog(UserId, OccurredUtc);
 | Measurements for a person, ordered by date | `IX_Measurements_Person_Date` |
 | Families a user belongs to | `IX_FamilyMemberships_UserId` |
 | Members of a family | `IX_FamilyMemberships_FamilyId` |
-| People in a family | `IX_People_FamilyId` |
+| People in a family | `IX_PersonFamilyMembership_FamilyId` |
+| Families a person belongs to | `IX_PersonFamilyMembership_PersonId` |
+| Children vs adults of a family (sharing) | `IX_PersonFamilyMembership_Family_Kind` |
 | Relationships from/to a person | `IX_PersonRelationships_From/To` |
 | Connections targeting a family | `IX_FamilyConnections_Target` |
 | Invitation lookup by token | `UQ_Invitations_Token` |
@@ -366,10 +463,14 @@ CREATE INDEX IX_AuditLog_User   ON AuditLog(UserId, OccurredUtc);
 - Foreign keys on every relationship.
 - `CHECK` constraints preventing self-relationships and self-connections.
 - `CHECK` requiring at least one of height/weight on a measurement.
-- Unique constraints on `(FamilyId, UserId)`, `(SourceFamilyId, TargetFamilyId)`,
-  `(FamilyConnectionId, PermissionKind)`, and `Invitations.Token`.
-- Soft-delete flags (`IsDeleted`) on `Families`, `People`, `Measurements` so
-  historical data is not destroyed by account or membership changes.
+- Unique constraints on `(FamilyId, UserId)`, `(PersonId, FamilyId)`,
+  `(SourceFamilyId, TargetFamilyId)`, `(FamilyConnectionId, PermissionKind)`,
+  and `Invitations.Token`.
+- Soft-delete flags (`IsDeleted`) on `Families`, `People`, `Measurements`, and
+  `IsActive` on `PersonFamilyMembership` and `FamilyConnections`, so historical
+  data is not destroyed by account, membership, or sharing changes.
+- `PRAGMA foreign_keys = ON` is set on every SQLite connection so FK
+  constraints are actually enforced.
 
 ### 4.5 Migration Strategy
 
@@ -377,7 +478,12 @@ CREATE INDEX IX_AuditLog_User   ON AuditLog(UserId, OccurredUtc);
   `0002_core.sql`, ...).
 - A small `MigrationRunner` (Dapper-based) applies scripts in order and records
   applied versions in a `SchemaVersions` table.
-- No EF migrations.
+- No EF migrations. The only EF Core usage in the solution is whatever
+  ASP.NET Core Identity requires internally; GrowthLog's own schema and data
+  access are Dapper + SQL scripts.
+- Scripts are written in portable SQL. Where an engine needs a different
+  spelling (e.g. `AUTOINCREMENT` vs `BIGSERIAL`), the migration runner selects
+  the appropriate variant by engine.
 
 ---
 
@@ -401,25 +507,27 @@ returning a decimal (e.g. `5.25`). The UI formats it as "5 years, 3 months".
 
 ## 6. Key Assumptions
 
-1. **SQL Server** is the target database for development and production.
-   Tests may use SQLite or a SQL Server LocalDB instance; the schema is written
-   to be portable enough for either.
+1. **SQLite is the target database** for local development and the default
+   self-hosted deployment (Docker or Linux LXC). The schema is written in
+   portable SQL so it also runs on **PostgreSQL** with minimal changes. No
+   SQL Server-specific types are used.
 2. **Blazor Web App with Interactive Server** rendering is the chosen
    architecture. No WebAssembly client is required for v1.
-3. **A person belongs to exactly one family.** Cross-family people (e.g. a
-   spouse who is in two households) are modeled as two `Person` rows linked by
-   a `Spouse` relationship, or as one person with a membership in both
-   families. The simpler v1 choice is one family per person; this can be
-   relaxed later by adding a `PersonFamilyMembership` join table.
-4. **`IsChild` is a stored flag**, set by the family owner, not derived from
-   age. This is because "child" in the sharing model means "dependent whose
-   data a parent controls," which is a social/legal concept, not a biological
-   one. It can be recomputed later if desired.
+3. **A person may belong to multiple families from v1.** Membership is modeled
+   by `PersonFamilyMembership`, not a `FamilyId` column on `Person`. A person's
+   measurements are a single historical record; each family they belong to
+   independently controls what it shares outward.
+4. **`MembershipKind` (`Adult` | `Child`) is per-family**, set by the family
+   owner, not derived from age. "Child" in the sharing model means "dependent
+   whose data a parent controls," which is a social/legal concept, not a
+   biological one. The same person can be a `Child` in one family and an
+   `Adult` in another.
 5. **Identity uses the default `IdentityUser` schema** with a small extension
    for display name and unit preference.
-6. **Invitation tokens** are 256-bit random values, base64url-encoded, stored
-   hashed if practical (v1 may store plaintext with a unique index; hashing is
-   a Phase 7 hardening item).
+6. **Invitation tokens** are 256-bit random values, base64url-encoded, and
+   **stored in plaintext in v1** with a unique index. Hashing the token at rest
+   is a deliberate Phase 7 hardening item; the column is sized to hold a hash
+   without a schema change.
 7. **No medical percentiles** in v1. The schema leaves room for a future
    `ReferenceDataset` table but none is created now.
 8. **Audit log is append-only** and written in the same transaction as the
@@ -433,18 +541,32 @@ returning a decimal (e.g. `5.25`). The UI formats it as "5 years, 3 months".
     authorization. Any new query that returns people or measurements must join
     against it (or an equivalent view). This is enforced by code review and by
     tests that assert unauthorized rows never appear.
+13. **All application data access is Dapper + parameterized SQL.** No EF Core
+    for GrowthLog data. The only EF Core usage permitted is whatever ASP.NET
+    Core Identity requires internally.
+14. **The `Viewer` role is implemented in v1.** It is read-only and cannot
+    mutate people, measurements, or sharing.
 
 ---
 
-## 7. Open Questions for the User
+## 7. Resolved Decisions
 
-1. Should a `Person` be allowed to belong to more than one family in v1, or is
-   one-family-per-person acceptable?
-2. Should invitation tokens be stored hashed from the start, or is plaintext
-   with a unique index acceptable for v1?
-3. Is SQL Server LocalDB acceptable for local development, or do you prefer
-   SQLite for zero-install development?
-4. Should the `Viewer` role be implemented in v1, or deferred?
-5. Should measurement edits be allowed at all, or should corrections be new
-   rows with a "supersedes" link? (The current design allows edits with an
-   audit trail; the alternative is more audit-friendly but more complex.)
+1. **Multi-family people are supported from v1** via
+   `PersonFamilyMembership`. One-family-per-person is not acceptable.
+2. **Invitation tokens are stored in plaintext in v1**, with a unique index.
+   Hashing at rest is a Phase 7 hardening item.
+3. **SQLite is the default database** for local development and self-hosted
+   deployment. PostgreSQL is supported with minimal changes.
+4. **The `Viewer` role is implemented in v1.**
+5. **Measurement edits are allowed**, with soft delete and an audit trail.
+   Corrections are edits, not new rows; the audit log records the change.
+
+## 8. Remaining Open Questions
+
+1. Should the audit log record a full before/after snapshot of edited
+   measurements in `DetailsJson`, or only the changed fields?
+2. Should `PersonFamilyMembership.IsActive = 0` be used to "remove" a person
+   from a family, or should removal be a hard delete of the membership row?
+   (Soft removal preserves history and is the current default.)
+3. Should the `Viewer` role be assignable via invitation, or only by an
+   `Owner` after the user has joined?
