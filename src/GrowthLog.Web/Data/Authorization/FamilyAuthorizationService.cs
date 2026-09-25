@@ -43,6 +43,36 @@ public class FamilyAuthorizationService
     }
 
     /// <summary>
+    /// A user may view a person if they hold any role in a family the person
+    /// is an active member of, or if they are the person's linked user.
+    /// </summary>
+    public async Task<bool> CanViewPersonAsync(string userId, string personId)
+    {
+        using var connection = _factory.Create();
+
+        var linkedUserId = await connection.QuerySingleOrDefaultAsync<string?>(
+            "SELECT UserId FROM People WHERE Id = @Id AND IsDeleted = 0",
+            new { Id = personId });
+
+        if (linkedUserId is not null && linkedUserId == userId)
+        {
+            return true;
+        }
+
+        var count = await connection.ExecuteScalarAsync<int>("""
+            SELECT COUNT(1)
+            FROM PersonFamilyMembership pfm
+            JOIN FamilyMemberships fm ON fm.FamilyId = pfm.FamilyId
+            WHERE pfm.PersonId = @PersonId
+              AND pfm.IsActive = 1
+              AND fm.UserId = @UserId
+            """,
+            new { PersonId = personId, UserId = userId });
+
+        return count > 0;
+    }
+
+    /// <summary>
     /// A user may mutate a person if they hold a mutating role in any family
     /// the person is an active member of, or if they are the person's linked user.
     /// </summary>

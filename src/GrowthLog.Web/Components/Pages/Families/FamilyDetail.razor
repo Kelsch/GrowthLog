@@ -82,10 +82,13 @@ else
         <EditForm Model="_newPerson" OnValidSubmit="AddPerson">
             <DataAnnotationsValidator />
             <div class="row g-2">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <InputText @bind-Value="_newPerson.FirstName" class="form-control" placeholder="First name" />
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <InputText @bind-Value="_newPerson.MiddleName" class="form-control" placeholder="Middle name" />
+                </div>
+                <div class="col-md-2">
                     <InputText @bind-Value="_newPerson.LastName" class="form-control" placeholder="Last name" />
                 </div>
                 <div class="col-md-3">
@@ -175,6 +178,7 @@ else
         var person = new Person
         {
             FirstName = _newPerson.FirstName,
+            MiddleName = _newPerson.MiddleName,
             LastName = _newPerson.LastName,
             DateOfBirth = _newPerson.DateOfBirth.ToString("yyyy-MM-dd")
         };
@@ -183,6 +187,7 @@ else
         await PersonFamilies.AddAsync(person.Id, FamilyId, _newPerson.MembershipKind);
 
         _newPerson.FirstName = string.Empty;
+        _newPerson.MiddleName = null;
         _newPerson.LastName = string.Empty;
         _newPerson.DateOfBirth = DateTime.Today;
 
@@ -200,6 +205,7 @@ else
     {
         [System.ComponentModel.DataAnnotations.Required]
         public string FirstName { get; set; } = string.Empty;
+        public string? MiddleName { get; set; }
         public string? LastName { get; set; }
         public DateTime DateOfBirth { get; set; } = DateTime.Today;
         public string MembershipKind { get; set; } = MembershipKinds.Child;

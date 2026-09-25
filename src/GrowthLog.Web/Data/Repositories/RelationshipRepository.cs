@@ -23,6 +23,34 @@ public class RelationshipRepository
         return rows.ToList();
     }
 
+    /// <summary>
+    /// Relationships for a person, joined with both people's names for display.
+    /// </summary>
+    public async Task<IReadOnlyList<PersonRelationshipView>> GetViewsForPersonAsync(string personId)
+    {
+        using var connection = _factory.Create();
+        var rows = await connection.QueryAsync<PersonRelationshipView>("""
+            SELECT
+                r.Id,
+                r.FromPersonId,
+                TRIM(COALESCE(f.FirstName, '') || ' ' ||
+                     COALESCE(f.MiddleName || ' ', '') ||
+                     COALESCE(f.LastName, '')) AS FromPersonName,
+                r.ToPersonId,
+                TRIM(COALESCE(t.FirstName, '') || ' ' ||
+                     COALESCE(t.MiddleName || ' ', '') ||
+                     COALESCE(t.LastName, '')) AS ToPersonName,
+                r.RelationshipType
+            FROM PersonRelationships r
+            JOIN People f ON f.Id = r.FromPersonId
+            JOIN People t ON t.Id = r.ToPersonId
+            WHERE r.FromPersonId = @PersonId OR r.ToPersonId = @PersonId
+            ORDER BY r.RelationshipType, FromPersonName, ToPersonName
+            """,
+            new { PersonId = personId });
+        return rows.ToList();
+    }
+
     public async Task AddParentChildAsync(string parentPersonId, string childPersonId)
     {
         using var connection = _factory.Create();

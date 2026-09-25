@@ -40,8 +40,8 @@ public class PersonRepository
     {
         using var connection = _factory.Create();
         await connection.ExecuteAsync("""
-            INSERT INTO People (Id, UserId, FirstName, LastName, DateOfBirth, AvatarUrl, CreatedUtc, IsDeleted)
-            VALUES (@Id, @UserId, @FirstName, @LastName, @DateOfBirth, @AvatarUrl, @CreatedUtc, 0)
+            INSERT INTO People (Id, UserId, FirstName, MiddleName, LastName, DateOfBirth, AvatarUrl, CreatedUtc, IsDeleted)
+            VALUES (@Id, @UserId, @FirstName, @MiddleName, @LastName, @DateOfBirth, @AvatarUrl, @CreatedUtc, 0)
             """, person);
         return person.Id;
     }
@@ -52,6 +52,7 @@ public class PersonRepository
         await connection.ExecuteAsync("""
             UPDATE People
             SET FirstName = @FirstName,
+                MiddleName = @MiddleName,
                 LastName = @LastName,
                 DateOfBirth = @DateOfBirth,
                 AvatarUrl = @AvatarUrl,
