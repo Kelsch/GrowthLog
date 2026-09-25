@@ -1,5 +1,6 @@
 using GrowthLog.Web.Components;
 using GrowthLog.Web.Data;
+using GrowthLog.Web.Data.Authorization;
 using GrowthLog.Web.Data.Repositories;
 using GrowthLog.Web.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -47,6 +48,7 @@ builder.Services.AddScoped<RelationshipRepository>();
 builder.Services.AddScoped<FamilyMembershipRepository>();
 builder.Services.AddScoped<PersonFamilyMembershipRepository>();
 builder.Services.AddScoped<AuditRepository>();
+builder.Services.AddScoped<FamilyAuthorizationService>();
 
 var app = builder.Build();
 
