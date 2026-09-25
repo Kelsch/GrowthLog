@@ -27,6 +27,12 @@ public sealed class MigrationRunner
         var migrationsDir = Path.Combine(_env.ContentRootPath, "db", "migrations");
         if (!Directory.Exists(migrationsDir))
         {
+            // Fall back to the output directory (migrations are copied there).
+            migrationsDir = Path.Combine(AppContext.BaseDirectory, "db", "migrations");
+        }
+
+        if (!Directory.Exists(migrationsDir))
+        {
             _logger.LogWarning("Migrations directory not found: {Dir}", migrationsDir);
             return;
         }
