@@ -1,5 +1,7 @@
 @page "/families/{FamilyId}"
 @attribute [Authorize]
+@rendermode InteractiveServer
+
 @inject FamilyRepository Families
 @inject FamilyMembershipRepository Memberships
 @inject PersonRepository People
@@ -27,6 +29,7 @@ else
         <EditForm Model="_rename" OnValidSubmit="Rename">
             <div class="input-group mb-3">
                 <InputText @bind-Value="_rename.Name" class="form-control" />
+                <AntiforgeryToken />
                 <button type="submit" class="btn btn-outline-secondary">Rename</button>
             </div>
         </EditForm>
