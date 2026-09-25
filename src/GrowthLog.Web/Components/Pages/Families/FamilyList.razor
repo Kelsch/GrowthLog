@@ -37,7 +37,7 @@ else
 }
 
 <h2 class="mt-4">Create a family</h2>
-<EditForm Model="_newFamily" OnValidSubmit="CreateFamily" FormName="create-family">
+<EditForm Model="_newFamily" OnValidSubmit="CreateFamily">
     <DataAnnotationsValidator />
     <div class="input-group">
         <InputText @bind-Value="_newFamily.Name" class="form-control" placeholder="Family name" />

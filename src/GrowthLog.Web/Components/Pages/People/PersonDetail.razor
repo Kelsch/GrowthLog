@@ -42,7 +42,7 @@ else
     @if (_canMutate)
     {
         <h3>Add relationship</h3>
-        <EditForm Model="_newRel" OnValidSubmit="AddRelationship" FormName="add-rel">
+        <EditForm Model="_newRel" OnValidSubmit="AddRelationship">
             <div class="row g-2">
                 <div class="col-md-3">
                     <InputSelect @bind-Value="_newRel.Type" class="form-select">

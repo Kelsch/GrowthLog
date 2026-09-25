@@ -24,7 +24,7 @@ else
 
     @if (_canAdminister)
     {
-        <EditForm Model="_rename" OnValidSubmit="Rename" FormName="rename-family">
+        <EditForm Model="_rename" OnValidSubmit="Rename">
             <div class="input-group mb-3">
                 <InputText @bind-Value="_rename.Name" class="form-control" />
                 <button type="submit" class="btn btn-outline-secondary">Rename</button>
@@ -76,7 +76,7 @@ else
     @if (_canMutate)
     {
         <h3>Add a person</h3>
-        <EditForm Model="_newPerson" OnValidSubmit="AddPerson" FormName="add-person">
+        <EditForm Model="_newPerson" OnValidSubmit="AddPerson">
             <DataAnnotationsValidator />
             <div class="row g-2">
                 <div class="col-md-3">
