@@ -1,0 +1,80 @@
+@page "/families"
+@attribute [Authorize]
+@inject FamilyRepository Families
+@inject FamilyMembershipRepository Memberships
+@inject AuthenticationStateProvider AuthState
+@inject NavigationManager Nav
+
+<PageTitle>Families — GrowthLog</PageTitle>
+
+<h1>Families</h1>
+
+@if (_families is null)
+{
+    <p>Loading…</p>
+}
+else if (_families.Count == 0)
+{
+    <p>You are not a member of any family yet.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr><th>Name</th><th>Your role</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var f in _families)
+            {
+                <tr>
+                    <td><a href="families/@f.Id">@f.Name</a></td>
+                    <td>@_roles.GetValueOrDefault(f.Id, "—")</td>
+                    <td><a class="btn btn-sm btn-outline-secondary" href="families/@f.Id">Open</a></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<h2 class="mt-4">Create a family</h2>
+<EditForm Model="_newFamily" OnValidSubmit="CreateFamily" FormName="create-family">
+    <DataAnnotationsValidator />
+    <div class="input-group">
+        <InputText @bind-Value="_newFamily.Name" class="form-control" placeholder="Family name" />
+        <button type="submit" class="btn btn-primary">Create</button>
+    </div>
+</EditForm>
+
+@code {
+    private List<Family>? _families;
+    private readonly Dictionary<string, string> _roles = new();
+    private readonly NewFamilyModel _newFamily = new();
+    private string? _userId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        _userId = state.User.GetUserId();
+        if (_userId is null) return;
+
+        _families = (await Families.GetForUserAsync(_userId)).ToList();
+        foreach (var f in _families)
+        {
+            var m = await Memberships.GetAsync(f.Id, _userId);
+            if (m is not null) _roles[f.Id] = m.Role;
+        }
+    }
+
+    private async Task CreateFamily()
+    {
+        if (_userId is null) return;
+        var id = await Families.CreateAsync(_newFamily.Name, _userId);
+        Nav.NavigateTo($"/families/{id}");
+    }
+
+    public class NewFamilyModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Name { get; set; } = string.Empty;
+    }
+}

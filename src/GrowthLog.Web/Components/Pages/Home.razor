@@ -1,0 +1,14 @@
+@page "/"
+@attribute [Authorize]
+
+<PageTitle>Dashboard — GrowthLog</PageTitle>
+
+<h1>Dashboard</h1>
+
+<AuthorizeView>
+    <Authorized>
+        <p>Welcome, @context.User.Identity?.Name.</p>
+        <p>Phase 2 is in place: authentication, families, people, and relationships.</p>
+        <p><a href="families">Manage your families</a> or <a href="people">view people</a>.</p>
+    </Authorized>
+</AuthorizeView>

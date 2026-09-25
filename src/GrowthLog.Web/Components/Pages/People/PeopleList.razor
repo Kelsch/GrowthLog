@@ -1,0 +1,50 @@
+@page "/people"
+@attribute [Authorize]
+@inject FamilyRepository Families
+@inject PersonRepository People
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>People — GrowthLog</PageTitle>
+
+<h1>People</h1>
+
+@if (_peopleByFamily is null)
+{
+    <p>Loading…</p>
+}
+else if (_peopleByFamily.Count == 0)
+{
+    <p>No people yet. Create a family and add people to it.</p>
+}
+else
+{
+    @foreach (var (family, people) in _peopleByFamily)
+    {
+        <h2>@family.Name</h2>
+        <ul>
+            @foreach (var p in people)
+            {
+                <li><a href="people/@p.Id">@p.FullName</a> — born @p.DateOfBirth</li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private List<(Family Family, List<Person> People)>? _peopleByFamily;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        var userId = state.User.GetUserId();
+        if (userId is null) return;
+
+        var families = await Families.GetForUserAsync(userId);
+        _peopleByFamily = new();
+        foreach (var f in families)
+        {
+            var people = (await People.GetForFamilyAsync(f.Id)).ToList();
+            _peopleByFamily.Add((f, people));
+        }
+    }
+}

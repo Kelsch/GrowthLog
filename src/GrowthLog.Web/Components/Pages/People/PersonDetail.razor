@@ -1,0 +1,149 @@
+@page "/people/{PersonId}"
+@attribute [Authorize]
+@inject PersonRepository People
+@inject PersonFamilyMembershipRepository PersonFamilies
+@inject FamilyRepository Families
+@inject RelationshipRepository Relationships
+@inject FamilyAuthorizationService Authz
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Person — GrowthLog</PageTitle>
+
+@if (_person is null)
+{
+    <p>Loading…</p>
+}
+else if (!_canView)
+{
+    <div class="alert alert-danger">You do not have access to this person.</div>
+}
+else
+{
+    <h1>@_person.FullName</h1>
+    <p>Born @_person.DateOfBirth</p>
+
+    <h2>Families</h2>
+    <ul>
+        @foreach (var m in _memberships)
+        {
+            var fam = _families.GetValueOrDefault(m.FamilyId);
+            <li>@(fam?.Name ?? m.FamilyId) — @m.MembershipKind @(m.IsActive ? "" : "(inactive)")</li>
+        }
+    </ul>
+
+    <h2>Relationships</h2>
+    <ul>
+        @foreach (var r in _relationships)
+        {
+            <li>@r.RelationshipType: @r.FromPersonId → @r.ToPersonId</li>
+        }
+    </ul>
+
+    @if (_canMutate)
+    {
+        <h3>Add relationship</h3>
+        <EditForm Model="_newRel" OnValidSubmit="AddRelationship" FormName="add-rel">
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <InputSelect @bind-Value="_newRel.Type" class="form-select">
+                        @foreach (var t in RelationshipTypes.All)
+                        {
+                            <option value="@t">@t</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-5">
+                    <InputSelect @bind-Value="_newRel.OtherPersonId" class="form-select">
+                        <option value="">— select person —</option>
+                        @foreach (var p in _candidates)
+                        {
+                            <option value="@p.Id">@p.FullName</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary">Add</button>
+                </div>
+            </div>
+        </EditForm>
+    }
+}
+
+@code {
+    [Parameter] public string PersonId { get; set; } = string.Empty;
+
+    private Person? _person;
+    private List<PersonFamilyMembership> _memberships = new();
+    private readonly Dictionary<string, Family> _families = new();
+    private List<PersonRelationship> _relationships = new();
+    private List<Person> _candidates = new();
+    private bool _canView;
+    private bool _canMutate;
+    private readonly NewRelationshipModel _newRel = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        var userId = state.User.GetUserId();
+        if (userId is null) return;
+
+        _person = await People.GetByIdAsync(PersonId);
+        if (_person is null) return;
+
+        _memberships = (await PersonFamilies.GetForPersonAsync(PersonId)).ToList();
+
+        foreach (var m in _memberships)
+        {
+            var fam = await Families.GetByIdAsync(m.FamilyId);
+            if (fam is not null) _families[m.FamilyId] = fam;
+        }
+
+        // View if the user can view any family the person belongs to.
+        foreach (var m in _memberships.Where(m => m.IsActive))
+        {
+            if (await Authz.CanViewFamilyAsync(userId, m.FamilyId))
+            {
+                _canView = true;
+                break;
+            }
+        }
+
+        _canMutate = await Authz.CanMutatePersonAsync(userId, PersonId);
+        if (!_canView) return;
+
+        _relationships = (await Relationships.GetForPersonAsync(PersonId)).ToList();
+
+        // Candidate people: everyone in the families this person belongs to.
+        var seen = new HashSet<string> { PersonId };
+        _candidates = new();
+        foreach (var m in _memberships.Where(m => m.IsActive))
+        {
+            foreach (var p in await People.GetForFamilyAsync(m.FamilyId))
+            {
+                if (seen.Add(p.Id)) _candidates.Add(p);
+            }
+        }
+    }
+
+    private async Task AddRelationship()
+    {
+        if (!_canMutate || string.IsNullOrEmpty(_newRel.OtherPersonId)) return;
+
+        if (_newRel.Type == RelationshipTypes.Parent)
+        {
+            await Relationships.AddParentChildAsync(PersonId, _newRel.OtherPersonId);
+        }
+        else
+        {
+            await Relationships.AddSpouseAsync(PersonId, _newRel.OtherPersonId);
+        }
+
+        _relationships = (await Relationships.GetForPersonAsync(PersonId)).ToList();
+    }
+
+    public class NewRelationshipModel
+    {
+        public string Type { get; set; } = RelationshipTypes.Parent;
+        public string OtherPersonId { get; set; } = string.Empty;
+    }
+}

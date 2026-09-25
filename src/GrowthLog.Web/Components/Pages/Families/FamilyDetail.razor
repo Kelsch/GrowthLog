@@ -1,0 +1,204 @@
+@page "/families/{FamilyId}"
+@attribute [Authorize]
+@inject FamilyRepository Families
+@inject FamilyMembershipRepository Memberships
+@inject PersonRepository People
+@inject PersonFamilyMembershipRepository PersonFamilies
+@inject FamilyAuthorizationService Authz
+@inject AuthenticationStateProvider AuthState
+@inject NavigationManager Nav
+
+<PageTitle>Family — GrowthLog</PageTitle>
+
+@if (_family is null)
+{
+    <p>Loading…</p>
+}
+else if (!_canView)
+{
+    <div class="alert alert-danger">You do not have access to this family.</div>
+}
+else
+{
+    <h1>@_family.Name</h1>
+
+    @if (_canAdminister)
+    {
+        <EditForm Model="_rename" OnValidSubmit="Rename" FormName="rename-family">
+            <div class="input-group mb-3">
+                <InputText @bind-Value="_rename.Name" class="form-control" />
+                <button type="submit" class="btn btn-outline-secondary">Rename</button>
+            </div>
+        </EditForm>
+    }
+
+    <h2>Members (users)</h2>
+    <table class="table">
+        <thead><tr><th>User</th><th>Role</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var m in _memberships)
+            {
+                <tr>
+                    <td>@m.UserId</td>
+                    <td>@m.Role</td>
+                    <td>
+                        @if (_canAdminister && m.UserId != _userId)
+                        {
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveMember(m)">Remove</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <h2>People</h2>
+    <table class="table">
+        <thead><tr><th>Name</th><th>Date of birth</th><th>Kind</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var p in _people)
+            {
+                <tr>
+                    <td><a href="people/@p.Id">@p.FullName</a></td>
+                    <td>@p.DateOfBirth</td>
+                    <td>@_kinds.GetValueOrDefault(p.Id, "—")</td>
+                    <td>
+                        @if (_canMutate)
+                        {
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RemovePerson(p)">Remove from family</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_canMutate)
+    {
+        <h3>Add a person</h3>
+        <EditForm Model="_newPerson" OnValidSubmit="AddPerson" FormName="add-person">
+            <DataAnnotationsValidator />
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <InputText @bind-Value="_newPerson.FirstName" class="form-control" placeholder="First name" />
+                </div>
+                <div class="col-md-3">
+                    <InputText @bind-Value="_newPerson.LastName" class="form-control" placeholder="Last name" />
+                </div>
+                <div class="col-md-3">
+                    <InputDate @bind-Value="_newPerson.DateOfBirth" class="form-control" />
+                </div>
+                <div class="col-md-2">
+                    <InputSelect @bind-Value="_newPerson.MembershipKind" class="form-select">
+                        @foreach (var k in MembershipKinds.All)
+                        {
+                            <option value="@k">@k</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-primary">Add</button>
+                </div>
+            </div>
+        </EditForm>
+    }
+}
+
+@code {
+    [Parameter] public string FamilyId { get; set; } = string.Empty;
+
+    private Family? _family;
+    private List<FamilyMembership> _memberships = new();
+    private List<Person> _people = new();
+    private readonly Dictionary<string, string> _kinds = new();
+    private bool _canView;
+    private bool _canMutate;
+    private bool _canAdminister;
+    private string? _userId;
+    private readonly RenameModel _rename = new();
+    private readonly NewPersonModel _newPerson = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        _userId = state.User.GetUserId();
+        if (_userId is null) return;
+
+        _family = await Families.GetByIdAsync(FamilyId);
+        if (_family is null) return;
+
+        _canView = await Authz.CanViewFamilyAsync(_userId, FamilyId);
+        _canMutate = await Authz.CanMutateFamilyAsync(_userId, FamilyId);
+        _canAdminister = await Authz.CanAdministerFamilyAsync(_userId, FamilyId);
+
+        if (!_canView) return;
+
+        _rename.Name = _family.Name;
+        _memberships = (await Memberships.GetForFamilyAsync(FamilyId)).ToList();
+        _people = (await People.GetForFamilyAsync(FamilyId)).ToList();
+
+        foreach (var p in _people)
+        {
+            var m = await PersonFamilies.GetAsync(p.Id, FamilyId);
+            if (m is not null) _kinds[p.Id] = m.MembershipKind;
+        }
+    }
+
+    private async Task Rename()
+    {
+        if (!_canAdminister) return;
+        await Families.RenameAsync(FamilyId, _rename.Name);
+        _family = await Families.GetByIdAsync(FamilyId);
+    }
+
+    private async Task RemoveMember(FamilyMembership m)
+    {
+        if (!_canAdminister) return;
+        await Memberships.RemoveAsync(FamilyId, m.UserId);
+        _memberships = (await Memberships.GetForFamilyAsync(FamilyId)).ToList();
+    }
+
+    private async Task RemovePerson(Person p)
+    {
+        if (!_canMutate) return;
+        await PersonFamilies.DeactivateAsync(p.Id, FamilyId);
+        _people = (await People.GetForFamilyAsync(FamilyId)).ToList();
+    }
+
+    private async Task AddPerson()
+    {
+        if (!_canMutate) return;
+
+        var person = new Person
+        {
+            FirstName = _newPerson.FirstName,
+            LastName = _newPerson.LastName,
+            DateOfBirth = _newPerson.DateOfBirth.ToString("yyyy-MM-dd")
+        };
+
+        await People.CreateAsync(person);
+        await PersonFamilies.AddAsync(person.Id, FamilyId, _newPerson.MembershipKind);
+
+        _newPerson.FirstName = string.Empty;
+        _newPerson.LastName = string.Empty;
+        _newPerson.DateOfBirth = DateTime.Today;
+
+        _people = (await People.GetForFamilyAsync(FamilyId)).ToList();
+        foreach (var p in _people)
+        {
+            var m = await PersonFamilies.GetAsync(p.Id, FamilyId);
+            if (m is not null) _kinds[p.Id] = m.MembershipKind;
+        }
+    }
+
+    public class RenameModel { public string Name { get; set; } = string.Empty; }
+
+    public class NewPersonModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        public string FirstName { get; set; } = string.Empty;
+        public string? LastName { get; set; }
+        public DateTime DateOfBirth { get; set; } = DateTime.Today;
+        public string MembershipKind { get; set; } = MembershipKinds.Child;
+    }
+}
