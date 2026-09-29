@@ -1,0 +1,171 @@
+@page "/settings/invitations"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@inject FamilyRepository Families
+@inject InvitationRepository Invitations
+@inject FamilyAuthorizationService Authz
+@inject AuthenticationStateProvider AuthState
+@inject NavigationManager Nav
+
+<PageTitle>Invitations — GrowthLog</PageTitle>
+
+<h1>Invitations</h1>
+
+@if (_families is null)
+{
+    <p>Loading…</p>
+}
+else if (_families.Count == 0)
+{
+    <p>You are not a member of any family yet.</p>
+}
+else
+{
+    <div class="mb-3">
+        <label class="form-label">Family</label>
+        <select class="form-select" value="@_selectedFamilyId" @onchange="OnFamilyChanged">
+            @foreach (var f in _families)
+            {
+                <option value="@f.Id">@f.Name</option>
+            }
+        </select>
+    </div>
+
+    @if (!_canAdminister)
+    {
+        <div class="alert alert-warning">
+            Only the family owner can create invitations.
+        </div>
+    }
+
+    @if (_canAdminister)
+    {
+        <h2>Create invitation</h2>
+        <EditForm Model="_newInvite" OnValidSubmit="CreateInvitation">
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <InputText @bind-Value="_newInvite.Email" class="form-control"
+                               placeholder="Email (optional)" />
+                </div>
+                <div class="col-md-3">
+                    <InputSelect @bind-Value="_newInvite.Role" class="form-select">
+                        @foreach (var r in FamilyRoles.All)
+                        {
+                            <option value="@r">@r</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-3">
+                    <AntiforgeryToken />
+                    <button type="submit" class="btn btn-primary">Create invitation</button>
+                </div>
+            </div>
+        </EditForm>
+
+        @if (!string.IsNullOrEmpty(_lastInviteUrl))
+        {
+            <div class="alert alert-info mt-3">
+                Invitation link: <a href="@_lastInviteUrl">@_lastInviteUrl</a>
+            </div>
+        }
+    }
+
+    <h2 class="mt-4">Existing invitations</h2>
+    @if (_invitations.Count == 0)
+    {
+        <p>No invitations yet.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Expires</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var i in _invitations)
+                {
+                    <tr>
+                        <td>@(string.IsNullOrEmpty(i.InvitedEmail) ? "—" : i.InvitedEmail)</td>
+                        <td>@i.IntendedRole</td>
+                        <td>@i.Status</td>
+                        <td>@i.CreatedUtc</td>
+                        <td>@i.ExpiresUtc</td>
+                        <td>
+                            @if (i.Status == InvitationStatuses.Pending)
+                            {
+                                <a class="btn btn-sm btn-outline-secondary"
+                                   href="account/accept-invitation?token=@i.Token">Open link</a>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private List<Family>? _families;
+    private List<InvitationView> _invitations = new();
+    private string? _selectedFamilyId;
+    private string? _userId;
+    private bool _canAdminister;
+    private string? _lastInviteUrl;
+    private readonly NewInviteModel _newInvite = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        _userId = state.User.GetUserId();
+        if (_userId is null) return;
+
+        _families = (await Families.GetForUserAsync(_userId)).ToList();
+        if (_families.Count > 0)
+        {
+            _selectedFamilyId = _families[0].Id;
+            await LoadAsync();
+        }
+    }
+
+    private async Task OnFamilyChanged(ChangeEventArgs e)
+    {
+        _selectedFamilyId = e.Value?.ToString();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_userId is null || _selectedFamilyId is null) return;
+        _canAdminister = await Authz.CanAdministerFamilyAsync(_userId, _selectedFamilyId);
+        _invitations = (await Invitations.GetForFamilyAsync(_selectedFamilyId)).ToList();
+    }
+
+    private async Task CreateInvitation()
+    {
+        if (!_canAdminister || _userId is null || _selectedFamilyId is null) return;
+
+        var invitation = await Invitations.CreateAsync(
+            _selectedFamilyId,
+            string.IsNullOrWhiteSpace(_newInvite.Email) ? null : _newInvite.Email,
+            _newInvite.Role,
+            _userId);
+
+        _lastInviteUrl = $"{Nav.BaseUri}account/accept-invitation?token={invitation.Token}";
+        _newInvite.Email = string.Empty;
+        await LoadAsync();
+    }
+
+    public class NewInviteModel
+    {
+        public string? Email { get; set; }
+        public string Role { get; set; } = FamilyRoles.Adult;
+    }
+}

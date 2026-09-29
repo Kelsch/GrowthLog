@@ -248,7 +248,8 @@ else
         if (!_canView) return;
 
         _relationships = (await Relationships.GetViewsForPersonAsync(PersonId)).ToList();
-        _measurements = (await Measurements.GetForPersonAsync(PersonId)).ToList();
+        // Authorization-aware: returns an empty list if the user cannot see this person.
+        _measurements = (await Measurements.GetVisibleForUserForPersonAsync(userId, PersonId)).ToList();
 
         // Candidate people: everyone in the families this person belongs to.
         var seen = new HashSet<string> { PersonId };
@@ -327,6 +328,9 @@ else
     {
         if (!_canMutate || _userId is null) return;
 
+        // Server-side re-check: never trust the UI flag alone.
+        if (!await Authz.CanMutatePersonAsync(_userId, PersonId)) return;
+
         double? heightCm = _unitSystem == "Metric"
             ? _entry.HeightCm
             : (_entry.HeightFeet is null && _entry.HeightInches is null
@@ -375,16 +379,19 @@ else
 
         _editing = null;
         _entry = new MeasurementEntryModel();
-        _measurements = (await Measurements.GetForPersonAsync(PersonId)).ToList();
+        _measurements = (await Measurements.GetVisibleForUserForPersonAsync(_userId, PersonId)).ToList();
     }
 
     private async Task DeleteMeasurement(Measurement m)
     {
         if (!_canMutate || _userId is null) return;
 
+        // Server-side re-check: never trust the UI flag alone.
+        if (!await Authz.CanMutateMeasurementAsync(_userId, m.Id)) return;
+
         await Measurements.SoftDeleteAsync(m.Id);
         await Audit.WriteAsync(_userId, "MeasurementDeleted", "Measurement", m.Id);
-        _measurements = (await Measurements.GetForPersonAsync(PersonId)).ToList();
+        _measurements = (await Measurements.GetVisibleForUserForPersonAsync(_userId, PersonId)).ToList();
     }
 
     public class NewRelationshipModel

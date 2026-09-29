@@ -141,7 +141,8 @@ else
 
         _rename.Name = _family.Name;
         _memberships = (await Memberships.GetForFamilyAsync(FamilyId)).ToList();
-        _people = (await People.GetForFamilyAsync(FamilyId)).ToList();
+        // Authorization-aware: only returns people the user may see.
+        _people = (await People.GetVisibleForUserInFamilyAsync(_userId, FamilyId)).ToList();
 
         foreach (var p in _people)
         {
@@ -166,9 +167,9 @@ else
 
     private async Task RemovePerson(Person p)
     {
-        if (!_canMutate) return;
+        if (!_canMutate || _userId is null) return;
         await PersonFamilies.DeactivateAsync(p.Id, FamilyId);
-        _people = (await People.GetForFamilyAsync(FamilyId)).ToList();
+        _people = (await People.GetVisibleForUserInFamilyAsync(_userId, FamilyId)).ToList();
     }
 
     private async Task AddPerson()
@@ -191,7 +192,7 @@ else
         _newPerson.LastName = string.Empty;
         _newPerson.DateOfBirth = DateTime.Today;
 
-        _people = (await People.GetForFamilyAsync(FamilyId)).ToList();
+        _people = (await People.GetVisibleForUserInFamilyAsync(_userId!, FamilyId)).ToList();
         foreach (var p in _people)
         {
             var m = await PersonFamilies.GetAsync(p.Id, FamilyId);

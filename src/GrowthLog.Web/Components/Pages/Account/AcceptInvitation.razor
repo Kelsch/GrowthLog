@@ -1,0 +1,74 @@
+@page "/account/accept-invitation"
+@layout AccountLayout
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@inject InvitationRepository Invitations
+@inject AuthenticationStateProvider AuthState
+@inject NavigationManager Nav
+
+<PageTitle>Accept invitation — GrowthLog</PageTitle>
+
+<h1>Accept invitation</h1>
+
+@if (_state == "loading")
+{
+    <p>Loading…</p>
+}
+else if (_state == "ok")
+{
+    <div class="alert alert-success">You have joined the family.</div>
+    <a class="btn btn-primary" href="/families">Go to families</a>
+}
+else if (_state == "invalid")
+{
+    <div class="alert alert-danger">This invitation is invalid or has already been used.</div>
+}
+else if (_state == "expired")
+{
+    <div class="alert alert-warning">This invitation has expired.</div>
+}
+else if (_state == "missing")
+{
+    <div class="alert alert-danger">No invitation token was supplied.</div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "token")]
+    private string? Token { get; set; }
+
+    private string _state = "loading";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Token))
+        {
+            _state = "missing";
+            return;
+        }
+
+        var state = await AuthState.GetAuthenticationStateAsync();
+        var userId = state.User.GetUserId();
+        if (userId is null)
+        {
+            _state = "invalid";
+            return;
+        }
+
+        var invitation = await Invitations.GetByTokenAsync(Token);
+        if (invitation is null || invitation.Status != InvitationStatuses.Pending)
+        {
+            _state = "invalid";
+            return;
+        }
+
+        if (DateTime.TryParse(invitation.ExpiresUtc, out var expires) && expires < DateTime.UtcNow)
+        {
+            _state = "expired";
+            return;
+        }
+
+        var accepted = await Invitations.AcceptAsync(Token, userId);
+        _state = accepted ? "ok" : "invalid";
+    }
+}

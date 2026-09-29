@@ -1,0 +1,200 @@
+@page "/settings/sharing"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@inject FamilyRepository Families
+@inject FamilyConnectionRepository Connections
+@inject SharingPermissionRepository Permissions
+@inject FamilyAuthorizationService Authz
+@inject AuthenticationStateProvider AuthState
+@inject NavigationManager Nav
+
+<PageTitle>Sharing &amp; Privacy — GrowthLog</PageTitle>
+
+<h1>Sharing &amp; Privacy</h1>
+
+@if (_families is null)
+{
+    <p>Loading…</p>
+} 
+else if (_families.Count == 0)
+{
+    <p>You are not a member of any family yet.</p>
+}
+else
+{
+    <div class="mb-3">
+        <label class="form-label">Family</label>
+        <select class="form-select" value="@_selectedFamilyId" @onchange="OnFamilyChanged">
+            @foreach (var f in _families)
+            {
+                <option value="@f.Id">@f.Name</option>
+            }
+        </select>
+    </div>
+
+    @if (!_canManage)
+    {
+        <div class="alert alert-warning">
+            Only the family owner can change sharing settings.
+        </div>
+    }
+
+    <h2>Connected families</h2>
+
+    @if (_connections.Count == 0)
+    {
+        <p>No connected families yet.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Family</th>
+                    <th>Label</th>
+                    <th>View children</th>
+                    <th>View adults</th>
+                    <th>View all</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in _connections)
+                {
+                    <tr>
+                        <td>@c.TargetFamilyName</td>
+                        <td>@c.Label</td>
+                        <td>
+                            <input type="checkbox" checked="@c.ViewChildren"
+                                   disabled="@(!_canManage)"
+                                   @onchange="e => Toggle(c, SharingPermissionKinds.ViewChildren, (bool)e.Value!)" />
+                        </td>
+                        <td>
+                            <input type="checkbox" checked="@c.ViewAdults"
+                                   disabled="@(!_canManage)"
+                                   @onchange="e => Toggle(c, SharingPermissionKinds.ViewAdults, (bool)e.Value!)" />
+                        </td>
+                        <td>
+                            <input type="checkbox" checked="@c.ViewAll"
+                                   disabled="@(!_canManage)"
+                                   @onchange="e => Toggle(c, SharingPermissionKinds.ViewAll, (bool)e.Value!)" />
+                        </td>
+                        <td>
+                            @if (_canManage)
+                            {
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => RemoveConnection(c)">Disconnect</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_canManage)
+    {
+        <h3>Connect another family</h3>
+        <EditForm Model="_newConnection" OnValidSubmit="CreateConnection">
+            <div class="row g-2">
+                <div class="col-md-5">
+                    <InputSelect @bind-Value="_newConnection.TargetFamilyId" class="form-select">
+                        <option value="">— select family —</option>
+                        @foreach (var f in _otherFamilies)
+                        {
+                            <option value="@f.Id">@f.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-4">
+                    <InputText @bind-Value="_newConnection.Label" class="form-control"
+                               placeholder="Label (e.g. My Parents)" />
+                </div>
+                <div class="col-md-3">
+                    <AntiforgeryToken />
+                    <button type="submit" class="btn btn-primary">Connect</button>
+                </div>
+            </div>
+        </EditForm>
+    }
+}
+
+@code {
+    private List<Family>? _families;
+    private List<Family> _otherFamilies = new();
+    private List<FamilyConnectionView> _connections = new();
+    private string? _selectedFamilyId;
+    private string? _userId;
+    private bool _canManage;
+    private readonly NewConnectionModel _newConnection = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        _userId = state.User.GetUserId();
+        if (_userId is null) return;
+
+        _families = (await Families.GetForUserAsync(_userId)).ToList();
+        if (_families.Count > 0)
+        {
+            _selectedFamilyId = _families[0].Id;
+            await LoadAsync();
+        }
+    }
+
+    private async Task OnFamilyChanged(ChangeEventArgs e)
+    {
+        _selectedFamilyId = e.Value?.ToString();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_userId is null || _selectedFamilyId is null) return;
+
+        _canManage = await Authz.CanManageSharingAsync(_userId, _selectedFamilyId);
+        _connections = (await Connections.GetOutgoingViewsAsync(_selectedFamilyId)).ToList();
+
+        // Candidate target families: any family the user belongs to, except the source.
+        _otherFamilies = _families!
+            .Where(f => f.Id != _selectedFamilyId)
+            .ToList();
+    }
+
+    private async Task Toggle(FamilyConnectionView c, string kind, bool granted)
+    {
+        if (!_canManage || _userId is null) return;
+        await Permissions.SetAsync(c.Id, kind, granted, _userId);
+        await LoadAsync();
+    }
+
+    private async Task CreateConnection()
+    {
+        if (!_canManage || _userId is null || _selectedFamilyId is null) return;
+        if (string.IsNullOrEmpty(_newConnection.TargetFamilyId)) return;
+
+        await Connections.CreateAsync(
+            _selectedFamilyId,
+            _newConnection.TargetFamilyId,
+            string.IsNullOrWhiteSpace(_newConnection.Label) ? null : _newConnection.Label,
+            _userId);
+
+        _newConnection.TargetFamilyId = string.Empty;
+        _newConnection.Label = string.Empty;
+        await LoadAsync();
+    }
+
+    private async Task RemoveConnection(FamilyConnectionView c)
+    {
+        if (!_canManage) return;
+        await Connections.DeleteAsync(c.Id);
+        await LoadAsync();
+    }
+
+    public class NewConnectionModel
+    {
+        public string TargetFamilyId { get; set; } = string.Empty;
+        public string? Label { get; set; }
+    }
+}

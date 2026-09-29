@@ -1,4 +1,5 @@
 using Dapper;
+using GrowthLog.Web.Data.Authorization;
 using GrowthLog.Web.Models;
 
 namespace GrowthLog.Web.Data.Repositories;
@@ -10,6 +11,43 @@ public class MeasurementRepository
     public MeasurementRepository(IDbConnectionFactory factory)
     {
         _factory = factory;
+    }
+
+    /// <summary>
+    /// Returns measurements for every person the user is authorized to see.
+    /// Authorization is enforced in SQL — no post-filtering.
+    /// </summary>
+    public async Task<IReadOnlyList<Measurement>> GetVisibleForUserAsync(string userId)
+    {
+        using var connection = _factory.Create();
+        var rows = await connection.QueryAsync<Measurement>($"""
+            SELECT m.*
+            FROM Measurements m
+            WHERE m.IsDeleted = 0
+              AND m.PersonId IN ({FamilyAuthorizationService.VisiblePeopleSql})
+            ORDER BY m.MeasurementDate DESC
+            """,
+            new { UserId = userId });
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// Returns measurements for a specific person, but only if the user is
+    /// authorized to see that person. Returns an empty list otherwise.
+    /// </summary>
+    public async Task<IReadOnlyList<Measurement>> GetVisibleForUserForPersonAsync(string userId, string personId)
+    {
+        using var connection = _factory.Create();
+        var rows = await connection.QueryAsync<Measurement>($"""
+            SELECT m.*
+            FROM Measurements m
+            WHERE m.PersonId = @PersonId
+              AND m.IsDeleted = 0
+              AND m.PersonId IN ({FamilyAuthorizationService.VisiblePeopleSql})
+            ORDER BY m.MeasurementDate DESC
+            """,
+            new { UserId = userId, PersonId = personId });
+        return rows.ToList();
     }
 
     public async Task<Measurement?> GetByIdAsync(string id)

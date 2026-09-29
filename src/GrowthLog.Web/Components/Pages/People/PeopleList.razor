@@ -43,7 +43,8 @@ else
         _peopleByFamily = new();
         foreach (var f in families)
         {
-            var people = (await People.GetForFamilyAsync(f.Id)).ToList();
+            // Authorization-aware: only returns people the user may see.
+            var people = (await People.GetVisibleForUserInFamilyAsync(userId, f.Id)).ToList();
             _peopleByFamily.Add((f, people));
         }
     }
