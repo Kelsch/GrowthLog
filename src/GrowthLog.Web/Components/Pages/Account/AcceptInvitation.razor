@@ -1,6 +1,5 @@
 @page "/account/accept-invitation"
 @layout AccountLayout
-@attribute [Authorize]
 @rendermode InteractiveServer
 
 @inject InvitationRepository Invitations
@@ -20,13 +19,28 @@ else if (_state == "ok")
     <div class="alert alert-success">You have joined the family.</div>
     <a class="btn btn-primary" href="/families">Go to families</a>
 }
-else if (_state == "invalid")
+else if (_state == "already-you")
 {
-    <div class="alert alert-danger">This invitation is invalid or has already been used.</div>
+    <div class="alert alert-info">You have already accepted this invitation. You are a member of the family.</div>
+    <a class="btn btn-primary" href="/families">Go to families</a>
+}
+else if (_state == "already-other")
+{
+    <div class="alert alert-warning">This invitation has already been accepted by someone else.</div>
 }
 else if (_state == "expired")
 {
     <div class="alert alert-warning">This invitation has expired.</div>
+}
+else if (_state == "email-mismatch")
+{
+    <div class="alert alert-danger">
+        This invitation was sent to a different email address. Please log in with the invited account.
+    </div>
+}
+else if (_state == "invalid")
+{
+    <div class="alert alert-danger">This invitation is invalid.</div>
 }
 else if (_state == "missing")
 {
@@ -38,9 +52,14 @@ else if (_state == "missing")
     private string? Token { get; set; }
 
     private string _state = "loading";
+    private bool _ran;
 
     protected override async Task OnParametersSetAsync()
     {
+        // Guard against re-running on every render (e.g. after auth state changes).
+        if (_ran) return;
+        _ran = true;
+
         if (string.IsNullOrWhiteSpace(Token))
         {
             _state = "missing";
@@ -49,26 +68,29 @@ else if (_state == "missing")
 
         var state = await AuthState.GetAuthenticationStateAsync();
         var userId = state.User.GetUserId();
+
         if (userId is null)
         {
-            _state = "invalid";
+            // Not logged in: send to register, preserving the token so the
+            // user comes straight back here after creating an account.
+            var returnUrl = Uri.EscapeDataString($"/account/accept-invitation?token={Token}");
+            Nav.NavigateTo($"/account/register?returnUrl={returnUrl}", forceLoad: true);
             return;
         }
 
-        var invitation = await Invitations.GetByTokenAsync(Token);
-        if (invitation is null || invitation.Status != InvitationStatuses.Pending)
+        var userEmail = state.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+            ?? state.User.Identity?.Name;
+
+        var result = await Invitations.AcceptAsync(Token, userId, userEmail);
+
+        _state = result switch
         {
-            _state = "invalid";
-            return;
-        }
-
-        if (DateTime.TryParse(invitation.ExpiresUtc, out var expires) && expires < DateTime.UtcNow)
-        {
-            _state = "expired";
-            return;
-        }
-
-        var accepted = await Invitations.AcceptAsync(Token, userId);
-        _state = accepted ? "ok" : "invalid";
+            InvitationRepository.AcceptResult.Accepted => "ok",
+            InvitationRepository.AcceptResult.AlreadyAcceptedByYou => "already-you",
+            InvitationRepository.AcceptResult.AlreadyAcceptedByOther => "already-other",
+            InvitationRepository.AcceptResult.Expired => "expired",
+            InvitationRepository.AcceptResult.EmailMismatch => "email-mismatch",
+            _ => "invalid"
+        };
     }
 }

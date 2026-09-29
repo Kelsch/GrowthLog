@@ -16,6 +16,7 @@ public static class IdentityEndpoints
             [FromForm] string displayName,
             [FromForm] string email,
             [FromForm] string password,
+            [FromForm] string? returnUrl,
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager) =>
         {
@@ -30,25 +31,39 @@ public static class IdentityEndpoints
             if (!result.Succeeded)
             {
                 var errors = string.Join("|", result.Errors.Select(e => e.Description));
-                return Results.Redirect($"/account/register?error={Uri.EscapeDataString(errors)}");
+                var errorUrl = $"/account/register?error={Uri.EscapeDataString(errors)}";
+                if (!string.IsNullOrWhiteSpace(returnUrl))
+                {
+                    errorUrl += $"&returnUrl={Uri.EscapeDataString(returnUrl)}";
+                }
+                return Results.Redirect(errorUrl);
             }
 
             await signInManager.SignInAsync(user, isPersistent: false);
-            return Results.Redirect("/");
+            return Results.Redirect(SafeReturnUrl(returnUrl));
         });
 
         app.MapPost("/account/login", async (
             [FromForm] string email,
             [FromForm] string password,
             [FromForm] bool rememberMe,
+            [FromForm] string? returnUrl,
             SignInManager<ApplicationUser> signInManager) =>
         {
             var result = await signInManager.PasswordSignInAsync(
                 email, password, rememberMe, lockoutOnFailure: false);
 
-            return result.Succeeded
-                ? Results.Redirect("/")
-                : Results.Redirect("/account/login?error=1");
+            if (!result.Succeeded)
+            {
+                var errorUrl = "/account/login?error=1";
+                if (!string.IsNullOrWhiteSpace(returnUrl))
+                {
+                    errorUrl += $"&returnUrl={Uri.EscapeDataString(returnUrl)}";
+                }
+                return Results.Redirect(errorUrl);
+            }
+
+            return Results.Redirect(SafeReturnUrl(returnUrl));
         });
 
         app.MapPost("/account/logout", async (SignInManager<ApplicationUser> signInManager) =>
@@ -56,5 +71,16 @@ public static class IdentityEndpoints
             await signInManager.SignOutAsync();
             return Results.Redirect("/");
         });
+    }
+
+    /// <summary>
+    /// Only allow local (relative) return URLs to avoid open-redirect issues.
+    /// </summary>
+    private static string SafeReturnUrl(string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl)) return "/";
+        if (!returnUrl.StartsWith('/')) return "/";
+        if (returnUrl.StartsWith("//")) return "/";
+        return returnUrl;
     }
 }
