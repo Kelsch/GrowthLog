@@ -3,7 +3,7 @@
 @rendermode InteractiveServer
 
 @inject FamilyRepository Families
-@inject InvitationRepository Invitations
+@inject InvitationRepository InvitationRepo
 @inject FamilyAuthorizationService Authz
 @inject AuthenticationStateProvider AuthState
 @inject NavigationManager Nav
@@ -145,14 +145,14 @@ else
     {
         if (_userId is null || _selectedFamilyId is null) return;
         _canAdminister = await Authz.CanAdministerFamilyAsync(_userId, _selectedFamilyId);
-        _invitations = (await Invitations.GetForFamilyAsync(_selectedFamilyId)).ToList();
+        _invitations = (await InvitationRepo.GetForFamilyAsync(_selectedFamilyId)).ToList();
     }
 
     private async Task CreateInvitation()
     {
         if (!_canAdminister || _userId is null || _selectedFamilyId is null) return;
 
-        var invitation = await Invitations.CreateAsync(
+        var invitation = await InvitationRepo.CreateAsync(
             _selectedFamilyId,
             string.IsNullOrWhiteSpace(_newInvite.Email) ? null : _newInvite.Email,
             _newInvite.Role,
