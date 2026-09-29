@@ -273,10 +273,10 @@ public class InvitationRepository
         if (!string.IsNullOrWhiteSpace(userEmail))
         {
             var localPart = userEmail.Split('@')[0];
-            matchId = candidates.FirstOrDefault(c =>
+            var match = candidates.FirstOrDefault(c =>
                 string.Equals(c.FirstName, localPart, StringComparison.OrdinalIgnoreCase)
-                || string.Equals($"{c.FirstName} {c.LastName}".Trim(), localPart, StringComparison.OrdinalIgnoreCase)
-            ).Id;
+                || string.Equals($"{c.FirstName} {c.LastName}".Trim(), localPart, StringComparison.OrdinalIgnoreCase));
+            matchId = match?.Id;
         }
 
         // Fall back to the only unlinked candidate.
