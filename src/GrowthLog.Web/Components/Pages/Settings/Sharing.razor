@@ -93,6 +93,11 @@ else
         </table>
     }
 
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
     @if (_canManage)
     {
         <h3>Connect another family</h3>
@@ -127,6 +132,7 @@ else
     private string? _selectedFamilyId;
     private string? _userId;
     private bool _canManage;
+    private string? _error;
     private readonly NewConnectionModel _newConnection = new();
 
     protected override async Task OnInitializedAsync()
@@ -146,6 +152,8 @@ else
     private async Task OnFamilyChanged(ChangeEventArgs e)
     {
         _selectedFamilyId = e.Value?.ToString();
+        // Reset the pending target selection so it can't point at the new source.
+        _newConnection.TargetFamilyId = string.Empty;
         await LoadAsync();
     }
 
@@ -160,6 +168,12 @@ else
         _otherFamilies = _families!
             .Where(f => f.Id != _selectedFamilyId)
             .ToList();
+
+        // If the previously selected target is no longer valid, clear it.
+        if (!_otherFamilies.Any(f => f.Id == _newConnection.TargetFamilyId))
+        {
+            _newConnection.TargetFamilyId = string.Empty;
+        }
     }
 
     private async Task Toggle(FamilyConnectionView c, string kind, bool granted)
@@ -173,6 +187,15 @@ else
     {
         if (!_canManage || _userId is null || _selectedFamilyId is null) return;
         if (string.IsNullOrEmpty(_newConnection.TargetFamilyId)) return;
+
+        // Defensive guard: never connect a family to itself.
+        if (_newConnection.TargetFamilyId == _selectedFamilyId)
+        {
+            _error = "A family cannot be connected to itself.";
+            return;
+        }
+
+        _error = null;
 
         await Connections.CreateAsync(
             _selectedFamilyId,

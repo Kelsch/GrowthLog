@@ -55,6 +55,12 @@ public class FamilyConnectionRepository
         string? label,
         string createdByUserId)
     {
+        // Defense in depth: the DB CHECK constraint also enforces this.
+        if (sourceFamilyId == targetFamilyId)
+        {
+            throw new InvalidOperationException("A family cannot be connected to itself.");
+        }
+
         using var connection = _factory.Create();
         var id = Guid.NewGuid().ToString("d");
         await connection.ExecuteAsync("""
