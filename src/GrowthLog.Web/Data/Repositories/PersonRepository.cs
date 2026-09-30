@@ -86,12 +86,19 @@ public class PersonRepository
     /// (i.e. the user is not a member of that family).
     /// This is the query the People list uses so that shared people from
     /// connected families are surfaced for every member of the receiving family.
+    ///
+    /// Direction convention:
+    ///   SourceFamilyId = family that owns the data (the person's family).
+    ///   TargetFamilyId = family that receives visibility (a family the user belongs to).
+    ///
+    /// This query is self-contained so that every active connection that
+    /// grants visibility to any of the user's families contributes people.
     /// </summary>
     public async Task<IReadOnlyList<VisiblePersonRow>> GetVisiblePeopleWithFamilyAsync(string userId)
     {
         using var connection = _factory.Create();
-        var rows = await connection.QueryAsync<VisiblePersonRow>($"""
-            SELECT
+        var rows = await connection.QueryAsync<VisiblePersonRow>("""
+            SELECT DISTINCT
                 p.Id,
                 p.UserId,
                 p.FirstName,
@@ -103,13 +110,41 @@ public class PersonRepository
                 p.IsDeleted,
                 pfm.FamilyId,
                 f.Name AS FamilyName,
-                CASE WHEN fm.UserId IS NULL THEN 1 ELSE 0 END AS IsShared
+                CASE WHEN own.UserId IS NULL THEN 1 ELSE 0 END AS IsShared
             FROM People p
             JOIN PersonFamilyMembership pfm ON pfm.PersonId = p.Id AND pfm.IsActive = 1
             JOIN Families f ON f.Id = pfm.FamilyId AND f.IsDeleted = 0
-            LEFT JOIN FamilyMemberships fm ON fm.FamilyId = pfm.FamilyId AND fm.UserId = @UserId
+            -- Is the user a direct member of the person's family?
+            LEFT JOIN FamilyMemberships own
+                ON own.FamilyId = pfm.FamilyId
+               AND own.UserId = @UserId
             WHERE p.IsDeleted = 0
-              AND p.Id IN ({FamilyAuthorizationService.VisiblePeopleSql})
+              AND (
+                -- Rule 1: direct membership in the person's family.
+                own.UserId IS NOT NULL
+                -- Rule 2: person is linked to the user's own account.
+                OR p.UserId = @UserId
+                -- Rule 4: person's family is the Source of an active connection
+                -- whose Target family the user belongs to, with a granted
+                -- permission matching the person's membership kind.
+                OR EXISTS (
+                    SELECT 1
+                    FROM FamilyConnections c
+                    JOIN FamilyMemberships fm2
+                        ON fm2.FamilyId = c.TargetFamilyId
+                       AND fm2.UserId = @UserId
+                    JOIN SharingPermissions sp
+                        ON sp.FamilyConnectionId = c.Id
+                       AND sp.IsGranted = 1
+                    WHERE c.SourceFamilyId = pfm.FamilyId
+                      AND c.IsActive = 1
+                      AND (
+                            sp.PermissionKind = 'ViewAll'
+                         OR (sp.PermissionKind = 'ViewChildren' AND pfm.MembershipKind = 'Child')
+                         OR (sp.PermissionKind = 'ViewAdults'   AND pfm.MembershipKind = 'Adult')
+                      )
+                )
+              )
             ORDER BY f.Name, p.FirstName, p.LastName
             """,
             new { UserId = userId });
@@ -121,11 +156,20 @@ public class PersonRepository
     /// the given family (i.e. the given family is the Target of a
     /// FamilyConnection with a granted SharingPermission). Used by the family
     /// detail page so every member of the receiving family sees shared people.
+    ///
+    /// Direction convention:
+    ///   SourceFamilyId = family that owns the data (the person's family).
+    ///   TargetFamilyId = family that receives visibility (the family being viewed).
+    ///
+    /// This query is intentionally self-contained (it does NOT embed
+    /// VisiblePeopleSql) so that every active connection contributing to the
+    /// target family is evaluated independently. Embedding VisiblePeopleSql
+    /// here previously caused only one connection to contribute.
     /// </summary>
     public async Task<IReadOnlyList<VisiblePersonRow>> GetSharedIntoFamilyAsync(string userId, string targetFamilyId)
     {
         using var connection = _factory.Create();
-        var rows = await connection.QueryAsync<VisiblePersonRow>($"""
+        var rows = await connection.QueryAsync<VisiblePersonRow>("""
             SELECT DISTINCT
                 p.Id,
                 p.UserId,
@@ -153,7 +197,6 @@ public class PersonRepository
                 ON sp.FamilyConnectionId = c.Id
                AND sp.IsGranted = 1
             WHERE p.IsDeleted = 0
-              AND p.Id IN ({FamilyAuthorizationService.VisiblePeopleSql})
               AND (
                     sp.PermissionKind = 'ViewAll'
                  OR (sp.PermissionKind = 'ViewChildren' AND pfm.MembershipKind = 'Child')

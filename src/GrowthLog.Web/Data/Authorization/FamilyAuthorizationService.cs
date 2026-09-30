@@ -72,6 +72,14 @@ public class FamilyAuthorizationService
     /// SQL fragment that yields the IDs of people visible to @UserId.
     /// Kept as a constant so repositories can embed it directly in their
     /// own queries (authorization-aware filtering at the database level).
+    ///
+    /// Direction convention for FamilyConnections:
+    ///   SourceFamilyId = the family that OWNS the data being shared out.
+    ///   TargetFamilyId = the family that RECEIVES visibility.
+    /// So a user gains shared visibility when they are a member of the
+    /// Target family of an active connection whose Source family has a
+    /// granted SharingPermission. Every active connection that matches is
+    /// considered independently — there is no "first match wins" behavior.
     /// </summary>
     public const string VisiblePeopleSql = """
         SELECT DISTINCT p.Id
@@ -89,8 +97,9 @@ public class FamilyAuthorizationService
             )
             -- Rule 2: person is linked to the user's own account.
             OR p.UserId = @UserId
-            -- Rule 4: person is in a connected family that has granted
-            -- a matching sharing permission to a family the user belongs to.
+            -- Rule 4: person is in a Source family of an active connection
+            -- whose Target family the user belongs to, and that connection
+            -- has a granted permission matching the person's membership kind.
             OR EXISTS (
                 SELECT 1
                 FROM PersonFamilyMembership pfm2
