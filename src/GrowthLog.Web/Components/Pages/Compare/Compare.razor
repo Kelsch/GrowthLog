@@ -1,0 +1,195 @@
+@page "/compare"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@inject FamilyRepository Families
+@inject PersonRepository People
+@inject ChartDataService Charts
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Compare — GrowthLog</PageTitle>
+
+<h1>Compare growth</h1>
+
+@if (_loading)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <label class="form-label">Metric</label>
+            <select class="form-select" value="@_metric" @onchange="OnMetricChanged">
+                @foreach (var m in ChartMetrics.All)
+                {
+                    <option value="@m">@m</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">X axis</label>
+            <select class="form-select" value="@_xAxis" @onchange="OnXAxisChanged">
+                @foreach (var x in ChartXAxisModes.All)
+                {
+                    <option value="@x">@x</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    <h2>Families</h2>
+    <div class="mb-3">
+        @foreach (var f in _families)
+        {
+            <label class="form-check form-check-inline">
+                <input type="checkbox" class="form-check-input"
+                       checked="@_selectedFamilyIds.Contains(f.Id)"
+                       @onchange="e => ToggleFamily(f.Id, (bool)e.Value!)" />
+                <span class="form-check-label">@f.Name</span>
+            </label>
+        }
+    </div>
+
+    <h2>People</h2>
+    <div class="mb-3">
+        @foreach (var p in _people)
+        {
+            <label class="form-check form-check-inline">
+                <input type="checkbox" class="form-check-input"
+                       checked="@_selectedPersonIds.Contains(p.Id)"
+                       @onchange="e => TogglePerson(p.Id, (bool)e.Value!)" />
+                <span class="form-check-label">@p.FullName</span>
+            </label>
+        }
+    </div>
+
+    <h2>@_metric over @(_xAxis == ChartXAxisModes.Age ? "age" : "date")</h2>
+    <LineChart Series="_series" XAxisMode="_xAxis" YUnit="@(_metric == ChartMetrics.Weight ? "kg" : "cm")" />
+
+    <h2 class="mt-4">Comparison table</h2>
+    @if (_series.Count == 0)
+    {
+        <p>No data to compare.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Age (years)</th>
+                    @foreach (var s in _series)
+                    {
+                        <th>@s.PersonName</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var age in _tableAges)
+                {
+                    <tr>
+                        <td>@age</td>
+                        @foreach (var s in _series)
+                        {
+                            var pt = s.Points.FirstOrDefault(p => Math.Abs(p.AgeYears - age) < 0.5);
+                            <td>@(pt is null ? "—" : FormatValue(pt.Y))</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p class="text-muted">Values shown are the nearest actual measurement within ±6 months of each age. Missing values are not interpolated.</p>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private string _metric = ChartMetrics.Height;
+    private string _xAxis = ChartXAxisModes.Age;
+    private string? _userId;
+
+    private List<Family> _families = new();
+    private List<Person> _people = new();
+    private readonly HashSet<string> _selectedFamilyIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _selectedPersonIds = new(StringComparer.Ordinal);
+
+    private IReadOnlyList<GrowthLog.Web.Data.Charts.ChartSeries> _series = new List<GrowthLog.Web.Data.Charts.ChartSeries>();
+    private List<int> _tableAges = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        _userId = state.User.GetUserId();
+        if (_userId is null) return;
+
+        _families = (await Families.GetForUserAsync(_userId)).ToList();
+        foreach (var f in _families) _selectedFamilyIds.Add(f.Id);
+
+        var rows = (await People.GetVisiblePeopleWithFamilyAsync(_userId)).ToList();
+        _people = rows
+            .GroupBy(r => r.Id)
+            .Select(g => new Person
+            {
+                Id = g.Key,
+                FirstName = g.First().FirstName,
+                MiddleName = g.First().MiddleName,
+                LastName = g.First().LastName,
+                DateOfBirth = g.First().DateOfBirth
+            })
+            .OrderBy(p => p.FirstName)
+            .ToList();
+
+        foreach (var p in _people) _selectedPersonIds.Add(p.Id);
+
+        await LoadAsync();
+        _loading = false;
+    }
+
+    private async Task OnMetricChanged(ChangeEventArgs e)
+    {
+        _metric = e.Value?.ToString() ?? ChartMetrics.Height;
+        await LoadAsync();
+    }
+
+    private async Task OnXAxisChanged(ChangeEventArgs e)
+    {
+        _xAxis = e.Value?.ToString() ?? ChartXAxisModes.Age;
+        await LoadAsync();
+    }
+
+    private async Task ToggleFamily(string familyId, bool selected)
+    {
+        if (selected) _selectedFamilyIds.Add(familyId);
+        else _selectedFamilyIds.Remove(familyId);
+        await LoadAsync();
+    }
+
+    private async Task TogglePerson(string personId, bool selected)
+    {
+        if (selected) _selectedPersonIds.Add(personId);
+        else _selectedPersonIds.Remove(personId);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_userId is null) return;
+
+        _series = await Charts.GetSeriesAsync(
+            _userId,
+            _metric,
+            _selectedPersonIds,
+            _selectedFamilyIds);
+
+        // Build a simple integer-age table from actual points.
+        var ages = _series.SelectMany(s => s.Points)
+            .Select(p => (int)Math.Floor(p.AgeYears))
+            .Distinct()
+            .OrderBy(a => a)
+            .ToList();
+        _tableAges = ages;
+    }
+
+    private string FormatValue(double v)
+        => _metric == ChartMetrics.Weight ? $"{v:0.#} kg" : $"{v:0.#} cm";
+}

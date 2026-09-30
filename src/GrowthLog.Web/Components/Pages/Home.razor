@@ -1,14 +1,198 @@
 @page "/"
 @attribute [Authorize]
+@rendermode InteractiveServer
+
+@inject FamilyRepository Families
+@inject PersonRepository People
+@inject MeasurementRepository Measurements
+@inject AuthenticationStateProvider AuthState
+@inject UserManager<ApplicationUser> UserManager
 
 <PageTitle>Dashboard — GrowthLog</PageTitle>
 
 <h1>Dashboard</h1>
 
-<AuthorizeView>
-    <Authorized>
-        <p>Welcome, @context.User.Identity?.Name.</p>
-        <p>Phase 2 is in place: authentication, families, people, and relationships.</p>
-        <p><a href="families">Manage your families</a> or <a href="people">view people</a>.</p>
-    </Authorized>
-</AuthorizeView>
+@if (_loading)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <p class="text-muted">See how your family grows.</p>
+
+    <h2>Upcoming measurements</h2>
+    @if (_upcoming.Count == 0)
+    {
+        <p>No upcoming birthdays in the next 60 days.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr><th>Person</th><th>Birthday</th><th>Last measurement</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var u in _upcoming)
+                {
+                    <tr>
+                        <td><a href="people/@u.PersonId">@u.PersonName</a></td>
+                        <td>@u.Birthday.ToString("MMMM d")</td>
+                        <td>@(u.LastMeasurementDate ?? "—")</td>
+                        <td><a class="btn btn-sm btn-primary" href="people/@u.PersonId">Record measurement</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <h2>Recent measurements</h2>
+    @if (_recent.Count == 0)
+    {
+        <p>No measurements recorded yet.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr><th>Date</th><th>Person</th><th>Height</th><th>Weight</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _recent)
+                {
+                    <tr>
+                        <td>@r.MeasurementDate</td>
+                        <td><a href="people/@r.PersonId">@r.PersonName</a></td>
+                        <td>@UnitConverter.FormatHeight(r.HeightCm, _unitSystem)</td>
+                        <td>@UnitConverter.FormatWeight(r.WeightKg, _unitSystem)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <h2>My families</h2>
+    @if (_ownFamilies.Count == 0)
+    {
+        <p>You are not a member of any family yet. <a href="families">Create one</a>.</p>
+    }
+    else
+    {
+        <ul>
+            @foreach (var f in _ownFamilies)
+            {
+                <li><a href="families/@f.Id">@f.Name</a></li>
+            }
+        </ul>
+    }
+
+    @if (_sharedFamilies.Count > 0)
+    {
+        <h2>Shared with me</h2>
+        <ul>
+            @foreach (var f in _sharedFamilies)
+            {
+                <li>@f</li>
+            }
+        </ul>
+    }
+
+    <p class="mt-4">
+        <a class="btn btn-outline-primary" href="compare">Compare growth</a>
+    </p>
+}
+
+@code {
+    private bool _loading = true;
+    private string _unitSystem = "Imperial";
+    private List<Family> _ownFamilies = new();
+    private List<string> _sharedFamilies = new();
+    private List<UpcomingRow> _upcoming = new();
+    private List<RecentRow> _recent = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        var userId = state.User.GetUserId();
+        if (userId is null) return;
+
+        var user = await UserManager.FindByIdAsync(userId);
+        _unitSystem = user?.PreferredUnitSystem ?? "Imperial";
+
+        _ownFamilies = (await Families.GetForUserAsync(userId)).ToList();
+
+        var rows = (await People.GetVisiblePeopleWithFamilyAsync(userId)).ToList();
+        _sharedFamilies = rows.Where(r => r.IsShared)
+            .Select(r => r.FamilyName)
+            .Distinct()
+            .OrderBy(n => n)
+            .ToList();
+
+        // Recent measurements (authorization-aware).
+        var measurements = await Measurements.GetVisibleForUserAsync(userId);
+        var peopleById = rows.GroupBy(r => r.Id).ToDictionary(g => g.Key, g => g.First());
+
+        _recent = measurements
+            .OrderByDescending(m => m.MeasurementDate)
+            .Take(10)
+            .Select(m => new RecentRow
+            {
+                PersonId = m.PersonId,
+                PersonName = peopleById.TryGetValue(m.PersonId, out var p) ? p.FullName : m.PersonId,
+                MeasurementDate = m.MeasurementDate,
+                HeightCm = m.HeightCm,
+                WeightKg = m.WeightKg
+            })
+            .ToList();
+
+        // Upcoming birthdays within the next 60 days.
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var lastByPerson = measurements
+            .GroupBy(m => m.PersonId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(m => m.MeasurementDate).First().MeasurementDate);
+
+        _upcoming = new();
+        foreach (var p in peopleById.Values)
+        {
+            if (!DateOnly.TryParse(p.DateOfBirth, out var dob)) continue;
+
+            var next = NextBirthday(dob, today);
+            var days = next.DayNumber - today.DayNumber;
+            if (days < 0 || days > 60) continue;
+
+            _upcoming.Add(new UpcomingRow
+            {
+                PersonId = p.Id,
+                PersonName = p.FullName,
+                Birthday = next,
+                LastMeasurementDate = lastByPerson.TryGetValue(p.Id, out var d) ? d : null
+            });
+        }
+        _upcoming = _upcoming.OrderBy(u => u.Birthday).ToList();
+
+        _loading = false;
+    }
+
+    private static DateOnly NextBirthday(DateOnly dob, DateOnly today)
+    {
+        var candidate = new DateOnly(today.Year, dob.Month, dob.Day);
+        if (candidate < today) candidate = new DateOnly(today.Year + 1, dob.Month, dob.Day);
+        return candidate;
+    }
+
+    private class UpcomingRow
+    {
+        public string PersonId { get; set; } = string.Empty;
+        public string PersonName { get; set; } = string.Empty;
+        public DateOnly Birthday { get; set; }
+        public string? LastMeasurementDate { get; set; }
+    }
+
+    private class RecentRow
+    {
+        public string PersonId { get; set; } = string.Empty;
+        public string PersonName { get; set; } = string.Empty;
+        public string MeasurementDate { get; set; } = string.Empty;
+        public double? HeightCm { get; set; }
+        public double? WeightKg { get; set; }
+    }
+}

@@ -1,6 +1,7 @@
 using GrowthLog.Web.Components;
 using GrowthLog.Web.Data;
 using GrowthLog.Web.Data.Authorization;
+using GrowthLog.Web.Data.Charts;
 using GrowthLog.Web.Data.Repositories;
 using GrowthLog.Web.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -53,6 +54,7 @@ builder.Services.AddScoped<FamilyConnectionRepository>();
 builder.Services.AddScoped<SharingPermissionRepository>();
 builder.Services.AddScoped<InvitationRepository>();
 builder.Services.AddScoped<FamilyAuthorizationService>();
+builder.Services.AddScoped<ChartDataService>();
 
 var app = builder.Build();
 
