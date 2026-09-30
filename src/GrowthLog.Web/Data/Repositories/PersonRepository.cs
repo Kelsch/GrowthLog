@@ -4,6 +4,36 @@ using GrowthLog.Web.Models;
 
 namespace GrowthLog.Web.Data.Repositories;
 
+/// <summary>
+/// A person plus the family they belong to and whether the current user sees
+/// them via a sharing connection rather than direct membership.
+/// </summary>
+public class VisiblePersonRow
+{
+    public string Id { get; set; } = string.Empty;
+    public string? UserId { get; set; }
+    public string FirstName { get; set; } = string.Empty;
+    public string? MiddleName { get; set; }
+    public string? LastName { get; set; }
+    public string DateOfBirth { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
+    public string CreatedUtc { get; set; } = string.Empty;
+    public bool IsDeleted { get; set; }
+    public string FamilyId { get; set; } = string.Empty;
+    public string FamilyName { get; set; } = string.Empty;
+    public bool IsShared { get; set; }
+
+    public string FullName
+    {
+        get
+        {
+            var parts = new[] { FirstName, MiddleName, LastName }
+                .Where(p => !string.IsNullOrWhiteSpace(p));
+            return string.Join(" ", parts);
+        }
+    }
+}
+
 public class PersonRepository
 {
     private readonly IDbConnectionFactory _factory;
@@ -47,6 +77,91 @@ public class PersonRepository
             ORDER BY p.FirstName, p.LastName
             """,
             new { UserId = userId, FamilyId = familyId });
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// Returns every person the user can see, together with the family they
+    /// belong to and whether that visibility comes from a sharing connection
+    /// (i.e. the user is not a member of that family).
+    /// This is the query the People list uses so that shared people from
+    /// connected families are surfaced for every member of the receiving family.
+    /// </summary>
+    public async Task<IReadOnlyList<VisiblePersonRow>> GetVisiblePeopleWithFamilyAsync(string userId)
+    {
+        using var connection = _factory.Create();
+        var rows = await connection.QueryAsync<VisiblePersonRow>($"""
+            SELECT
+                p.Id,
+                p.UserId,
+                p.FirstName,
+                p.MiddleName,
+                p.LastName,
+                p.DateOfBirth,
+                p.AvatarUrl,
+                p.CreatedUtc,
+                p.IsDeleted,
+                pfm.FamilyId,
+                f.Name AS FamilyName,
+                CASE WHEN fm.UserId IS NULL THEN 1 ELSE 0 END AS IsShared
+            FROM People p
+            JOIN PersonFamilyMembership pfm ON pfm.PersonId = p.Id AND pfm.IsActive = 1
+            JOIN Families f ON f.Id = pfm.FamilyId AND f.IsDeleted = 0
+            LEFT JOIN FamilyMemberships fm ON fm.FamilyId = pfm.FamilyId AND fm.UserId = @UserId
+            WHERE p.IsDeleted = 0
+              AND p.Id IN ({FamilyAuthorizationService.VisiblePeopleSql})
+            ORDER BY f.Name, p.FirstName, p.LastName
+            """,
+            new { UserId = userId });
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// Returns people from *connected source families* that are shared into
+    /// the given family (i.e. the given family is the Target of a
+    /// FamilyConnection with a granted SharingPermission). Used by the family
+    /// detail page so every member of the receiving family sees shared people.
+    /// </summary>
+    public async Task<IReadOnlyList<VisiblePersonRow>> GetSharedIntoFamilyAsync(string userId, string targetFamilyId)
+    {
+        using var connection = _factory.Create();
+        var rows = await connection.QueryAsync<VisiblePersonRow>($"""
+            SELECT DISTINCT
+                p.Id,
+                p.UserId,
+                p.FirstName,
+                p.MiddleName,
+                p.LastName,
+                p.DateOfBirth,
+                p.AvatarUrl,
+                p.CreatedUtc,
+                p.IsDeleted,
+                pfm.FamilyId,
+                f.Name AS FamilyName,
+                1 AS IsShared
+            FROM People p
+            JOIN PersonFamilyMembership pfm ON pfm.PersonId = p.Id AND pfm.IsActive = 1
+            JOIN Families f ON f.Id = pfm.FamilyId AND f.IsDeleted = 0
+            JOIN FamilyConnections c
+                ON c.SourceFamilyId = pfm.FamilyId
+               AND c.TargetFamilyId = @TargetFamilyId
+               AND c.IsActive = 1
+            JOIN FamilyMemberships fm
+                ON fm.FamilyId = c.TargetFamilyId
+               AND fm.UserId = @UserId
+            JOIN SharingPermissions sp
+                ON sp.FamilyConnectionId = c.Id
+               AND sp.IsGranted = 1
+            WHERE p.IsDeleted = 0
+              AND p.Id IN ({FamilyAuthorizationService.VisiblePeopleSql})
+              AND (
+                    sp.PermissionKind = 'ViewAll'
+                 OR (sp.PermissionKind = 'ViewChildren' AND pfm.MembershipKind = 'Child')
+                 OR (sp.PermissionKind = 'ViewAdults'   AND pfm.MembershipKind = 'Adult')
+              )
+            ORDER BY f.Name, p.FirstName, p.LastName
+            """,
+            new { UserId = userId, TargetFamilyId = targetFamilyId });
         return rows.ToList();
     }
 

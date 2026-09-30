@@ -8,30 +8,51 @@
 
 <h1>People</h1>
 
-@if (_peopleByFamily is null)
+@if (_rows is null)
 {
     <p>Loading…</p>
 }
-else if (_peopleByFamily.Count == 0)
+else if (_rows.Count == 0)
 {
     <p>No people yet. Create a family and add people to it.</p>
 }
 else
 {
-    @foreach (var (family, people) in _peopleByFamily)
+    @if (_ownFamilies.Count > 0)
     {
-        <h2>@family.Name</h2>
-        <ul>
-            @foreach (var p in people)
-            {
-                <li><a href="people/@p.Id">@p.FullName</a> — born @p.DateOfBirth</li>
-            }
-        </ul>
+        <h2>My families</h2>
+        @foreach (var (familyName, people) in _ownFamilies)
+        {
+            <h3>@familyName</h3>
+            <ul>
+                @foreach (var p in people)
+                {
+                    <li><a href="people/@p.Id">@p.FullName</a> — born @p.DateOfBirth</li>
+                }
+            </ul>
+        }
+    }
+
+    @if (_sharedFamilies.Count > 0)
+    {
+        <h2>Shared with me</h2>
+        @foreach (var (familyName, people) in _sharedFamilies)
+        {
+            <h3>@familyName</h3>
+            <ul>
+                @foreach (var p in people)
+                {
+                    <li><a href="people/@p.Id">@p.FullName</a> — born @p.DateOfBirth</li>
+                }
+            </ul>
+        }
     }
 }
 
 @code {
-    private List<(Family Family, List<Person> People)>? _peopleByFamily;
+    private List<VisiblePersonRow>? _rows;
+    private List<(string FamilyName, List<VisiblePersonRow> People)> _ownFamilies = new();
+    private List<(string FamilyName, List<VisiblePersonRow> People)> _sharedFamilies = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -39,13 +60,21 @@ else
         var userId = state.User.GetUserId();
         if (userId is null) return;
 
-        var families = await Families.GetForUserAsync(userId);
-        _peopleByFamily = new();
-        foreach (var f in families)
-        {
-            // Authorization-aware: only returns people the user may see.
-            var people = (await People.GetVisibleForUserInFamilyAsync(userId, f.Id)).ToList();
-            _peopleByFamily.Add((f, people));
-        }
+        // Authorization-aware: returns own-family people plus people shared
+        // with any family the user belongs to (via FamilyConnection +
+        // SharingPermission). Works for Owner, Adult, and Viewer roles.
+        _rows = (await People.GetVisiblePeopleWithFamilyAsync(userId)).ToList();
+
+        _ownFamilies = _rows
+            .Where(r => !r.IsShared)
+            .GroupBy(r => r.FamilyName)
+            .Select(g => (g.Key, g.ToList()))
+            .ToList();
+
+        _sharedFamilies = _rows
+            .Where(r => r.IsShared)
+            .GroupBy(r => r.FamilyName)
+            .Select(g => (g.Key, g.ToList()))
+            .ToList();
     }
 }

@@ -76,6 +76,25 @@ else
         </tbody>
     </table>
 
+    @if (_sharedPeople.Count > 0)
+    {
+        <h2>Shared with this family</h2>
+        <p class="text-muted">People from connected families that have granted this family access.</p>
+        <table class="table">
+            <thead><tr><th>Name</th><th>Date of birth</th><th>From family</th></tr></thead>
+            <tbody>
+                @foreach (var p in _sharedPeople)
+                {
+                    <tr>
+                        <td><a href="people/@p.Id">@p.FullName</a></td>
+                        <td>@p.DateOfBirth</td>
+                        <td>@p.FamilyName</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
     @if (_canMutate)
     {
         <h3>Add a person</h3>
@@ -116,6 +135,7 @@ else
     private Family? _family;
     private List<FamilyMembership> _memberships = new();
     private List<Person> _people = new();
+    private List<VisiblePersonRow> _sharedPeople = new();
     private readonly Dictionary<string, string> _kinds = new();
     private bool _canView;
     private bool _canMutate;
@@ -143,6 +163,10 @@ else
         _memberships = (await Memberships.GetForFamilyAsync(FamilyId)).ToList();
         // Authorization-aware: only returns people the user may see.
         _people = (await People.GetVisibleForUserInFamilyAsync(_userId, FamilyId)).ToList();
+
+        // People shared *into* this family from connected source families.
+        // Visible to every member of this family (Owner, Adult, Viewer).
+        _sharedPeople = (await People.GetSharedIntoFamilyAsync(_userId, FamilyId)).ToList();
 
         foreach (var p in _people)
         {
