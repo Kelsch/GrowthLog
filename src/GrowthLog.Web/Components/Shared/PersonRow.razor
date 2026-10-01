@@ -1,0 +1,78 @@
+@* Compact member row for a family page. Shows identity, age, latest
+   measurement, and a direct "Add measurement" action. *@
+
+<div class="person-row">
+    <div class="person-row-avatar" aria-hidden="true">@Initial</div>
+
+    <div class="person-row-main">
+        <div class="person-row-name">
+            <a href="people/@PersonId">@PersonName</a>
+            <span class="person-row-kind">@MembershipKind</span>
+        </div>
+        <div class="person-row-meta">
+            @if (AgeYears is not null)
+            {
+                <span>Age @AgeYears.Value.ToString("0.#")</span>
+                <span class="dot">·</span>
+            }
+            <span>Birthday @BirthdayText</span>
+        </div>
+        <div class="person-row-latest">
+            @if (LatestHeightText is not null || LatestWeightText is not null)
+            {
+                @if (LatestHeightText is not null)
+                {
+                    <span>@LatestHeightText</span>
+                }
+                @if (LatestHeightText is not null && LatestWeightText is not null)
+                {
+                    <span class="dot">·</span>
+                }
+                @if (LatestWeightText is not null)
+                {
+                    <span>@LatestWeightText</span>
+                }
+                @if (!string.IsNullOrEmpty(LastMeasuredText))
+                {
+                    <span class="dot">·</span>
+                    <span>Measured @LastMeasuredText</span>
+                }
+            }
+            else
+            {
+                <span class="text-muted">No measurements yet</span>
+            }
+        </div>
+    </div>
+
+    <div class="person-row-actions">
+        <button class="btn btn-sm btn-primary" @onclick="OnAddMeasurement">
+            + Add measurement
+        </button>
+        @if (ShowRemove)
+        {
+            <button class="btn btn-sm btn-outline-danger" @onclick="OnRemove">
+                Remove
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string PersonId { get; set; } = string.Empty;
+    [Parameter] public string PersonName { get; set; } = string.Empty;
+    [Parameter] public string MembershipKind { get; set; } = string.Empty;
+    [Parameter] public double? AgeYears { get; set; }
+    [Parameter] public string BirthdayText { get; set; } = string.Empty;
+    [Parameter] public string? LatestHeightText { get; set; }
+    [Parameter] public string? LatestWeightText { get; set; }
+    [Parameter] public string? LastMeasuredText { get; set; }
+    [Parameter] public bool ShowRemove { get; set; }
+    [Parameter] public EventCallback OnAddMeasurement { get; set; }
+    [Parameter] public EventCallback OnRemove { get; set; }
+
+    private string Initial
+        => string.IsNullOrWhiteSpace(PersonName)
+            ? "?"
+            : PersonName.Trim()[0].ToString().ToUpperInvariant();
+}

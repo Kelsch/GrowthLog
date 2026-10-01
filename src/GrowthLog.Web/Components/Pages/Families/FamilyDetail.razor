@@ -10,8 +10,9 @@
 @inject FamilyAuthorizationService Authz
 @inject AuthenticationStateProvider AuthState
 @inject NavigationManager Nav
+@inject UserManager<ApplicationUser> UserManager
 
-<PageTitle>Family — GrowthLog</PageTitle>
+<PageTitle>@(_family?.Name ?? "Family") — GrowthLog</PageTitle>
 
 @if (_family is null)
 {
@@ -23,15 +24,34 @@ else if (!_canView)
 }
 else
 {
-    <h1>@_family.Name</h1>
+    <div class="family-header">
+        <div class="family-header-main">
+            <h1>@_family.Name</h1>
+            <div class="family-header-counts">
+                <span>@_adultCount adult@(_adultCount == 1 ? "" : "s")</span>
+                <span class="dot">·</span>
+                <span>@_childCount child@(_childCount == 1 ? "" : "ren")</span>
+            </div>
+        </div>
+        <div class="family-header-actions">
+            @if (_canAdminister)
+            {
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => _renaming = !_renaming">
+                    Rename
+                </button>
+            }
+            <a class="btn btn-sm btn-outline-secondary" href="settings/sharing">Sharing</a>
+        </div>
+    </div>
 
-    @if (_canAdminister)
+    @if (_renaming && _canAdminister)
     {
         <EditForm Model="_rename" OnValidSubmit="Rename">
             <div class="input-group mb-3">
                 <InputText @bind-Value="_rename.Name" class="form-control" />
                 <AntiforgeryToken />
-                <button type="submit" class="btn btn-outline-secondary">Rename</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="() => _renaming = false">Cancel</button>
             </div>
         </EditForm>
     }
@@ -60,6 +80,79 @@ else
         </div>
     }
 
+    <h2>People in this family</h2>
+
+    <div class="people-toolbar">
+        <div class="people-filters">
+            <button class="filter-chip @(_filter == "all" ? "active" : "")" @onclick="() => _filter = "all"">All</button>
+            <button class="filter-chip @(_filter == "adults" ? "active" : "")" @onclick="() => _filter = "adults"">Adults</button>
+            <button class="filter-chip @(_filter == "children" ? "active" : "")" @onclick="() => _filter = "children"">Children</button>
+        </div>
+        <div class="people-search">
+            <input class="form-control" placeholder="Search people…"
+                   value="@_peopleSearch"
+                   @oninput="e => _peopleSearch = e.Value?.ToString()" />
+        </div>
+    </div>
+
+    @if (_filteredPeople.Count == 0)
+    {
+        <p class="text-muted">No people match this filter.</p>
+    }
+    else
+    {
+        <div class="person-list">
+            @foreach (var p in _filteredPeople)
+            {
+                var kind = _kinds.GetValueOrDefault(p.Id, "");
+                var latest = _latestByPerson.GetValueOrDefault(p.Id);
+                <PersonRow
+                    PersonId="@p.Id"
+                    PersonName="@p.FullName"
+                    MembershipKind="@kind"
+                    AgeYears="@AgeFor(p)"
+                    BirthdayText="@BirthdayTextFor(p)"
+                    LatestHeightText="@UnitConverter.FormatHeight(latest?.HeightCm, _unitSystem)"
+                    LatestWeightText="@UnitConverter.FormatWeight(latest?.WeightKg, _unitSystem)"
+                    LastMeasuredText="@latest?.MeasurementDate"
+                    ShowRemove="@_canMutate"
+                    OnAddMeasurement="() => OpenDialog(p.Id)"
+                    OnRemove="() => RemovePerson(p)" />
+            }
+        </div>
+    }
+
+    @if (_canMutate)
+    {
+        <AddPersonPanel FamilyId="@FamilyId"
+                        UserId="@_userId"
+                        CurrentMemberIds="@_people.Select(p => p.Id).ToHashSet()"
+                        OnChanged="OnPeopleChanged" />
+    }
+
+    @if (_sharedPeople.Count > 0)
+    {
+        <h2>Shared with this family</h2>
+        <p class="text-muted">People from connected families that have granted this family access.</p>
+        <div class="person-list">
+            @foreach (var p in _sharedPeople)
+            {
+                <div class="person-row person-row-shared">
+                    <div class="person-row-avatar" aria-hidden="true">@(string.IsNullOrWhiteSpace(p.FullName) ? "?" : p.FullName.Trim()[0].ToString().ToUpperInvariant())</div>
+                    <div class="person-row-main">
+                        <div class="person-row-name">
+                            <a href="people/@p.Id">@p.FullName</a>
+                            <span class="person-row-origin">from @p.FamilyName</span>
+                        </div>
+                        <div class="person-row-meta">
+                            <span>Birthday @p.DateOfBirth</span>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
     <h2>Members (users)</h2>
     <table class="table">
         <thead><tr><th>User</th><th>Role</th><th></th></tr></thead>
@@ -80,134 +173,10 @@ else
         </tbody>
     </table>
 
-    <h2>People</h2>
-    <table class="table">
-        <thead><tr><th>Name</th><th>Date of birth</th><th>Kind</th><th></th></tr></thead>
-        <tbody>
-            @foreach (var p in _people)
-            {
-                <tr>
-                    <td><a href="people/@p.Id">@p.FullName</a></td>
-                    <td>@p.DateOfBirth</td>
-                    <td>@_kinds.GetValueOrDefault(p.Id, "—")</td>
-                    <td>
-                        @if (_canMutate)
-                        {
-                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RemovePerson(p)">Remove from family</button>
-                        }
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
-
-    @if (_sharedPeople.Count > 0)
-    {
-        <h2>Shared with this family</h2>
-        <p class="text-muted">People from connected families that have granted this family access.</p>
-        <table class="table">
-            <thead><tr><th>Name</th><th>Date of birth</th><th>From family</th></tr></thead>
-            <tbody>
-                @foreach (var p in _sharedPeople)
-                {
-                    <tr>
-                        <td><a href="people/@p.Id">@p.FullName</a></td>
-                        <td>@p.DateOfBirth</td>
-                        <td>@p.FamilyName</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
-
     <MeasurementDialog IsOpen="_dialogOpen"
                        Person="_dialogPerson"
                        OnClose="CloseDialog"
                        OnSaved="OnMeasurementSaved" />
-
-    @if (_canMutate)
-    {
-        <h3>Add an existing person</h3>
-        <p class="text-muted">
-            Link someone who already exists (for example, a relative who is already
-            in another family). This does not create a duplicate person record.
-        </p>
-
-        <div class="row g-2 mb-2">
-            <div class="col-md-6">
-                <input class="form-control" placeholder="Search by name…"
-                       value="@_searchQuery"
-                       @oninput="OnSearchInput" />
-            </div>
-            <div class="col-md-3">
-                <select class="form-select" value="@_existingKind" @onchange="e => _existingKind = e.Value?.ToString() ?? MembershipKinds.Child">
-                    @foreach (var k in MembershipKinds.All)
-                    {
-                        <option value="@k">@k</option>
-                    }
-                </select>
-            </div>
-        </div>
-
-        @if (_searchResults.Count == 0)
-        {
-            <p class="text-muted">No matching people you can see.</p>
-        }
-        else
-        {
-            <table class="table">
-                <thead><tr><th>Name</th><th>Date of birth</th><th>Already in this family</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var p in _searchResults)
-                    {
-                        var already = _kinds.ContainsKey(p.Id);
-                        <tr>
-                            <td>@p.FullName</td>
-                            <td>@p.DateOfBirth</td>
-                            <td>@(already ? "Yes" : "—")</td>
-                            <td>
-                                <button class="btn btn-sm btn-primary"
-                                        disabled="@already"
-                                        @onclick="() => AddExistingPerson(p)">
-                                    Add to family
-                                </button>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        }
-
-        <h3>Create a new person</h3>
-        <EditForm Model="_newPerson" OnValidSubmit="AddPerson">
-            <DataAnnotationsValidator />
-            <div class="row g-2">
-                <div class="col-md-2">
-                    <InputText @bind-Value="_newPerson.FirstName" class="form-control" placeholder="First name" />
-                </div>
-                <div class="col-md-2">
-                    <InputText @bind-Value="_newPerson.MiddleName" class="form-control" placeholder="Middle name" />
-                </div>
-                <div class="col-md-2">
-                    <InputText @bind-Value="_newPerson.LastName" class="form-control" placeholder="Last name" />
-                </div>
-                <div class="col-md-3">
-                    <InputDate @bind-Value="_newPerson.DateOfBirth" class="form-control" />
-                </div>
-                <div class="col-md-2">
-                    <InputSelect @bind-Value="_newPerson.MembershipKind" class="form-select">
-                        @foreach (var k in MembershipKinds.All)
-                        {
-                            <option value="@k">@k</option>
-                        }
-                    </InputSelect>
-                </div>
-                <div class="col-md-1">
-                    <button type="submit" class="btn btn-primary">Add</button>
-                </div>
-            </div>
-        </EditForm>
-    }
 }
 
 @code {
@@ -218,27 +187,58 @@ else
     private List<Person> _people = new();
     private List<VisiblePersonRow> _sharedPeople = new();
     private readonly Dictionary<string, string> _kinds = new();
+    private Dictionary<string, Measurement> _latestByPerson = new(StringComparer.Ordinal);
     private bool _canView;
     private bool _canMutate;
     private bool _canAdminister;
     private string? _userId;
+    private string _unitSystem = "Imperial";
+    private bool _renaming;
     private readonly RenameModel _rename = new();
-    private readonly NewPersonModel _newPerson = new();
 
-    private string? _searchQuery;
-    private string _existingKind = MembershipKinds.Child;
-    private List<Person> _searchResults = new();
-    private System.Threading.Timer? _searchDebounce;
+    private string _filter = "all";
+    private string? _peopleSearch;
 
     private List<UpcomingRow> _upcoming = new();
     private bool _dialogOpen;
     private Person? _dialogPerson;
+
+    private int _adultCount => _kinds.Values.Count(k => k == MembershipKinds.Adult);
+    private int _childCount => _kinds.Values.Count(k => k == MembershipKinds.Child);
+
+    private List<Person> _filteredPeople
+    {
+        get
+        {
+            IEnumerable<Person> q = _people;
+
+            if (_filter == "adults")
+            {
+                q = q.Where(p => _kinds.GetValueOrDefault(p.Id) == MembershipKinds.Adult);
+            }
+            else if (_filter == "children")
+            {
+                q = q.Where(p => _kinds.GetValueOrDefault(p.Id) == MembershipKinds.Child);
+            }
+
+            if (!string.IsNullOrWhiteSpace(_peopleSearch))
+            {
+                var s = _peopleSearch.Trim();
+                q = q.Where(p => p.FullName.Contains(s, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return q.OrderBy(p => p.FirstName).ThenBy(p => p.LastName).ToList();
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
         var state = await AuthState.GetAuthenticationStateAsync();
         _userId = state.User.GetUserId();
         if (_userId is null) return;
+
+        var user = await UserManager.FindByIdAsync(_userId);
+        _unitSystem = user?.PreferredUnitSystem ?? "Imperial";
 
         _family = await Families.GetByIdAsync(FamilyId);
         if (_family is null) return;
@@ -251,21 +251,31 @@ else
 
         _rename.Name = _family.Name;
         _memberships = (await Memberships.GetForFamilyAsync(FamilyId)).ToList();
+
+        await ReloadPeopleAsync();
+        await LoadUpcomingAsync();
+    }
+
+    private async Task ReloadPeopleAsync()
+    {
+        if (_userId is null) return;
+
         // Authorization-aware: only returns people the user may see.
         _people = (await People.GetVisibleForUserInFamilyAsync(_userId, FamilyId)).ToList();
 
-        // People shared *into* this family from connected source families.
-        // Visible to every member of this family (Owner, Adult, Viewer).
-        _sharedPeople = (await People.GetSharedIntoFamilyAsync(_userId, FamilyId)).ToList();
-
+        _kinds.Clear();
         foreach (var p in _people)
         {
             var m = await PersonFamilies.GetAsync(p.Id, FamilyId);
             if (m is not null) _kinds[p.Id] = m.MembershipKind;
         }
 
-        await LoadUpcomingAsync();
-        await RefreshSearchAsync();
+        // Latest measurement per person (authorization-aware, single query).
+        _latestByPerson = (await Measurements.GetLatestForPeopleAsync(_userId, _people.Select(p => p.Id)))
+            .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
+
+        // People shared *into* this family from connected source families.
+        _sharedPeople = (await People.GetSharedIntoFamilyAsync(_userId, FamilyId)).ToList();
     }
 
     private async Task LoadUpcomingAsync()
@@ -273,26 +283,15 @@ else
         if (_userId is null) return;
 
         var today = DateOnly.FromDateTime(DateTime.Today);
-        var measurements = await Measurements.GetVisibleForUserForPersonAsync(_userId, string.Empty);
-        // GetVisibleForUserForPersonAsync with an empty id returns nothing, so
-        // load per-person instead (family sizes are small).
-        var lastByPerson = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var p in _people)
-        {
-            var ms = await Measurements.GetVisibleForUserForPersonAsync(_userId, p.Id);
-            var latest = ms.OrderByDescending(m => m.MeasurementDate).FirstOrDefault();
-            if (latest is not null) lastByPerson[p.Id] = latest.MeasurementDate;
-        }
 
         _upcoming = new();
         foreach (var p in _people)
         {
             if (!DateOnly.TryParse(p.DateOfBirth, out var dob)) continue;
 
-            var due = MeasurementDueCalculator.Evaluate(
-                dob,
-                lastByPerson.TryGetValue(p.Id, out var d) ? d : null,
-                today);
+            var last = _latestByPerson.GetValueOrDefault(p.Id)?.MeasurementDate;
+
+            var due = MeasurementDueCalculator.Evaluate(dob, last, today);
 
             if (due.Status == MeasurementDueStatuses.Completed) continue;
 
@@ -317,6 +316,16 @@ else
             .ToList();
     }
 
+    private double? AgeFor(Person p)
+        => DateOnly.TryParse(p.DateOfBirth, out var dob)
+            ? AgeCalculator.GetAgeYears(dob, DateOnly.FromDateTime(DateTime.Today))
+            : null;
+
+    private string BirthdayTextFor(Person p)
+        => DateOnly.TryParse(p.DateOfBirth, out var dob)
+            ? dob.ToString("MMM d")
+            : p.DateOfBirth;
+
     private void OpenDialog(string personId)
     {
         var p = _people.FirstOrDefault(x => x.Id == personId);
@@ -334,56 +343,14 @@ else
     private async Task OnMeasurementSaved()
     {
         CloseDialog();
+        await ReloadPeopleAsync();
         await LoadUpcomingAsync();
     }
 
-    private void OnSearchInput(ChangeEventArgs e)
+    private async Task OnPeopleChanged()
     {
-        _searchQuery = e.Value?.ToString();
-
-        // Debounce so we don't hit the database on every keystroke.
-        _searchDebounce?.Dispose();
-        _searchDebounce = new System.Threading.Timer(async _ =>
-        {
-            await InvokeAsync(async () =>
-            {
-                await RefreshSearchAsync();
-                StateHasChanged();
-            });
-        }, null, 250, System.Threading.Timeout.Infinite);
-    }
-
-    private async Task RefreshSearchAsync()
-    {
-        if (_userId is null || !_canMutate) return;
-        _searchResults = (await People.SearchVisibleAsync(_userId, _searchQuery)).ToList();
-    }
-
-    private async Task AddExistingPerson(Person p)
-    {
-        if (!_canMutate || _userId is null) return;
-
-        // Defense in depth: only link people the user is authorized to see.
-        var visible = await People.GetVisibleByIdsAsync(_userId, new[] { p.Id });
-        if (visible.Count == 0) return;
-
-        // Do not create a duplicate Person row — just add the membership.
-        await PersonFamilies.AddOrReactivateAsync(p.Id, FamilyId, _existingKind);
-
         await ReloadPeopleAsync();
-        await RefreshSearchAsync();
-    }
-
-    private async Task ReloadPeopleAsync()
-    {
-        if (_userId is null) return;
-        _people = (await People.GetVisibleForUserInFamilyAsync(_userId, FamilyId)).ToList();
-        _kinds.Clear();
-        foreach (var p in _people)
-        {
-            var m = await PersonFamilies.GetAsync(p.Id, FamilyId);
-            if (m is not null) _kinds[p.Id] = m.MembershipKind;
-        }
+        await LoadUpcomingAsync();
     }
 
     private async Task Rename()
@@ -391,6 +358,7 @@ else
         if (!_canAdminister) return;
         await Families.RenameAsync(FamilyId, _rename.Name);
         _family = await Families.GetByIdAsync(FamilyId);
+        _renaming = false;
     }
 
     private async Task RemoveMember(FamilyMembership m)
@@ -404,32 +372,8 @@ else
     {
         if (!_canMutate || _userId is null) return;
         await PersonFamilies.DeactivateAsync(p.Id, FamilyId);
-        _people = (await People.GetVisibleForUserInFamilyAsync(_userId, FamilyId)).ToList();
-    }
-
-    private async Task AddPerson()
-    {
-        if (!_canMutate) return;
-
-        var person = new Person
-        {
-            FirstName = _newPerson.FirstName,
-            MiddleName = _newPerson.MiddleName,
-            LastName = _newPerson.LastName,
-            DateOfBirth = _newPerson.DateOfBirth.ToString("yyyy-MM-dd"),
-            CreatedByUserId = _userId
-        };
-
-        await People.CreateAsync(person);
-        await PersonFamilies.AddOrReactivateAsync(person.Id, FamilyId, _newPerson.MembershipKind);
-
-        _newPerson.FirstName = string.Empty;
-        _newPerson.MiddleName = null;
-        _newPerson.LastName = string.Empty;
-        _newPerson.DateOfBirth = DateTime.Today;
-
         await ReloadPeopleAsync();
-        await RefreshSearchAsync();
+        await LoadUpcomingAsync();
     }
 
     private class UpcomingRow
@@ -446,14 +390,4 @@ else
     }
 
     public class RenameModel { public string Name { get; set; } = string.Empty; }
-
-    public class NewPersonModel
-    {
-        [System.ComponentModel.DataAnnotations.Required]
-        public string FirstName { get; set; } = string.Empty;
-        public string? MiddleName { get; set; }
-        public string? LastName { get; set; }
-        public DateTime DateOfBirth { get; set; } = DateTime.Today;
-        public string MembershipKind { get; set; } = MembershipKinds.Child;
-    }
 }

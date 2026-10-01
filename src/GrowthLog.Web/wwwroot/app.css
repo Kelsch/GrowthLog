@@ -502,6 +502,205 @@ main {
     }
 }
 
+/* GrowthLog family header */
+.family-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.family-header-main h1 {
+    margin-bottom: 0.25rem;
+}
+
+.family-header-counts {
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+
+.family-header-counts .dot {
+    margin: 0 0.35rem;
+}
+
+.family-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+/* GrowthLog people toolbar */
+.people-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.people-filters {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.filter-chip {
+    padding: 0.3rem 0.75rem;
+    font-size: 0.85rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+}
+
+.filter-chip.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+
+.people-search {
+    flex: 1;
+    max-width: 280px;
+}
+
+/* GrowthLog person rows */
+.person-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.person-row {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.75rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.person-row-shared {
+    border-left: 4px solid #a5b4fc;
+}
+
+.person-row-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #e0e7ff;
+    color: #3730a3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.person-row-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.person-row-name {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.person-row-kind {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    background: #f1f5f9;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+}
+
+.person-row-origin {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.person-row-meta,
+.person-row-latest {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-top: 0.1rem;
+}
+
+.person-row-meta .dot,
+.person-row-latest .dot {
+    margin: 0 0.35rem;
+}
+
+.person-row-actions {
+    display: flex;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+    .person-row {
+        flex-wrap: wrap;
+    }
+
+    .person-row-actions {
+        width: 100%;
+    }
+
+    .person-row-actions .btn {
+        flex: 1;
+    }
+}
+
+/* GrowthLog add person panel */
+.add-person-panel {
+    margin: 1rem 0;
+}
+
+.add-person-body {
+    margin-top: 0.75rem;
+    padding: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.add-person-tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.add-person-tab {
+    padding: 0.5rem 0.85rem;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.add-person-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    font-weight: 600;
+}
+
 /* GrowthLog misc */
 .badge-unassigned {
     display: inline-block;

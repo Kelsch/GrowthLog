@@ -1,0 +1,233 @@
+@* Collapsible panel for adding or linking people to a family without
+   leaving the page. Two modes: link an existing person, or create a new one. *@
+
+<div class="add-person-panel">
+    <button type="button" class="btn btn-outline-secondary" @onclick="Toggle">
+        @(_expanded ? "− Add a person" : "+ Add a person")
+    </button>
+
+    @if (_expanded)
+    {
+        <div class="add-person-body">
+            <div class="add-person-tabs">
+                <button type="button"
+                        class="add-person-tab @(_mode == "existing" ? "active" : "")"
+                        @onclick="() => _mode = "existing"">
+                    Add existing person
+                </button>
+                <button type="button"
+                        class="add-person-tab @(_mode == "new" ? "active" : "")"
+                        @onclick="() => _mode = "new"">
+                    Create new person
+                </button>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_message))
+            {
+                <div class="alert alert-info">@_message</div>
+            }
+
+            @if (_mode == "existing")
+            {
+                <p class="text-muted">
+                    Link someone who already exists (for example, a relative who is
+                    already in another family). This does not create a duplicate
+                    person record.
+                </p>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-md-6">
+                        <input class="form-control" placeholder="Search by name…"
+                               value="@_searchQuery"
+                               @oninput="OnSearchInput" />
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select" value="@_existingKind"
+                                @onchange="e => _existingKind = e.Value?.ToString() ?? MembershipKinds.Child">
+                            @foreach (var k in MembershipKinds.All)
+                            {
+                                <option value="@k">@k</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                @if (_searchResults.Count == 0)
+                {
+                    <p class="text-muted">No matching people you can see.</p>
+                }
+                else
+                {
+                    <table class="table">
+                        <thead>
+                            <tr><th>Name</th><th>Date of birth</th><th>Already in this family</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in _searchResults)
+                            {
+                                var already = AlreadyInFamily(p.Id);
+                                <tr>
+                                    <td>@p.FullName</td>
+                                    <td>@p.DateOfBirth</td>
+                                    <td>@(already ? "Yes" : "—")</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary"
+                                                disabled="@already"
+                                                @onclick="() => LinkExisting(p)">
+                                            Add to family
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            }
+            else
+            {
+                <p class="text-muted">Create a brand-new person and add them to this family.</p>
+
+                <EditForm Model="_newPerson" OnValidSubmit="CreateNew">
+                    <DataAnnotationsValidator />
+                    <div class="row g-2">
+                        <div class="col-md-2">
+                            <InputText @bind-Value="_newPerson.FirstName" class="form-control" placeholder="First name" />
+                        </div>
+                        <div class="col-md-2">
+                            <InputText @bind-Value="_newPerson.MiddleName" class="form-control" placeholder="Middle name" />
+                        </div>
+                        <div class="col-md-2">
+                            <InputText @bind-Value="_newPerson.LastName" class="form-control" placeholder="Last name" />
+                        </div>
+                        <div class="col-md-3">
+                            <InputDate @bind-Value="_newPerson.DateOfBirth" class="form-control" />
+                        </div>
+                        <div class="col-md-2">
+                            <InputSelect @bind-Value="_newPerson.MembershipKind" class="form-select">
+                                @foreach (var k in MembershipKinds.All)
+                                {
+                                    <option value="@k">@k</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="col-md-1">
+                            <button type="submit" class="btn btn-primary">Add</button>
+                        </div>
+                    </div>
+                </EditForm>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string FamilyId { get; set; } = string.Empty;
+    [Parameter] public string? UserId { get; set; }
+    [Parameter] public IReadOnlyCollection<string> CurrentMemberIds { get; set; } = Array.Empty<string>();
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    [Inject] private PersonRepository People { get; set; } = default!;
+    [Inject] private PersonFamilyMembershipRepository PersonFamilies { get; set; } = default!;
+    [Inject] private AuditRepository Audit { get; set; } = default!;
+
+    private bool _expanded;
+    private string _mode = "existing";
+    private string? _message;
+
+    private string? _searchQuery;
+    private string _existingKind = MembershipKinds.Child;
+    private List<Person> _searchResults = new();
+    private System.Threading.Timer? _searchDebounce;
+
+    private readonly NewPersonModel _newPerson = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshSearchAsync();
+    }
+
+    private void Toggle()
+    {
+        _expanded = !_expanded;
+        _message = null;
+    }
+
+    private bool AlreadyInFamily(string personId)
+        => CurrentMemberIds.Contains(personId);
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        _searchQuery = e.Value?.ToString();
+
+        _searchDebounce?.Dispose();
+        _searchDebounce = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await RefreshSearchAsync();
+                StateHasChanged();
+            });
+        }, null, 250, System.Threading.Timeout.Infinite);
+    }
+
+    private async Task RefreshSearchAsync()
+    {
+        if (UserId is null) return;
+        _searchResults = (await People.SearchVisibleAsync(UserId, _searchQuery)).ToList();
+    }
+
+    private async Task LinkExisting(Person p)
+    {
+        if (UserId is null) return;
+
+        // Defense in depth: only link people the user is authorized to see.
+        var visible = await People.GetVisibleByIdsAsync(UserId, new[] { p.Id });
+        if (visible.Count == 0) return;
+
+        // Do not create a duplicate Person row — just add the membership.
+        await PersonFamilies.AddOrReactivateAsync(p.Id, FamilyId, _existingKind);
+        await Audit.WriteAsync(UserId, "PersonFamilyMembershipAdded", "Person", p.Id);
+
+        _message = $"{p.FullName} is now part of this family.";
+        await RefreshSearchAsync();
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task CreateNew()
+    {
+        if (UserId is null) return;
+
+        var person = new Person
+        {
+            FirstName = _newPerson.FirstName,
+            MiddleName = _newPerson.MiddleName,
+            LastName = _newPerson.LastName,
+            DateOfBirth = _newPerson.DateOfBirth.ToString("yyyy-MM-dd"),
+            CreatedByUserId = UserId
+        };
+
+        await People.CreateAsync(person);
+        await PersonFamilies.AddOrReactivateAsync(person.Id, FamilyId, _newPerson.MembershipKind);
+        await Audit.WriteAsync(UserId, "PersonCreated", "Person", person.Id);
+
+        _message = $"{person.FullName} was added to this family.";
+
+        _newPerson.FirstName = string.Empty;
+        _newPerson.MiddleName = null;
+        _newPerson.LastName = string.Empty;
+        _newPerson.DateOfBirth = DateTime.Today;
+
+        await RefreshSearchAsync();
+        await OnChanged.InvokeAsync();
+    }
+
+    public class NewPersonModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        public string FirstName { get; set; } = string.Empty;
+        public string? MiddleName { get; set; }
+        public string? LastName { get; set; }
+        public DateTime DateOfBirth { get; set; } = DateTime.Today;
+        public string MembershipKind { get; set; } = MembershipKinds.Child;
+    }
+}

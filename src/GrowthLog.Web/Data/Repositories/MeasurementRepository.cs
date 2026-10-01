@@ -50,6 +50,48 @@ public class MeasurementRepository
         return rows.ToList();
     }
 
+    /// <summary>
+    /// Returns the latest measurement per person for the given people, but
+    /// only for people the user is authorized to see. Used by family member
+    /// rows to show latest height/weight without N+1 queries.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, Measurement>> GetLatestForPeopleAsync(
+        string userId,
+        IEnumerable<string> personIds)
+    {
+        var ids = personIds.Distinct(StringComparer.Ordinal).ToList();
+        if (ids.Count == 0) return new Dictionary<string, Measurement>(StringComparer.Ordinal);
+
+        using var connection = _factory.Create();
+        var rows = await connection.QueryAsync<Measurement>($"""
+            SELECT m.*
+            FROM Measurements m
+            JOIN (
+                SELECT PersonId, MAX(MeasurementDate) AS MaxDate
+                FROM Measurements
+                WHERE IsDeleted = 0
+                  AND PersonId IN @Ids
+                GROUP BY PersonId
+            ) latest
+              ON latest.PersonId = m.PersonId
+             AND latest.MaxDate = m.MeasurementDate
+            WHERE m.IsDeleted = 0
+              AND m.PersonId IN ({FamilyAuthorizationService.VisiblePeopleSql})
+            """,
+            new { UserId = userId, Ids = ids });
+
+        var result = new Dictionary<string, Measurement>(StringComparer.Ordinal);
+        foreach (var m in rows)
+        {
+            // If multiple measurements share the max date, keep the first.
+            if (!result.ContainsKey(m.PersonId))
+            {
+                result[m.PersonId] = m;
+            }
+        }
+        return result;
+    }
+
     public async Task<Measurement?> GetByIdAsync(string id)
     {
         using var connection = _factory.Create();
