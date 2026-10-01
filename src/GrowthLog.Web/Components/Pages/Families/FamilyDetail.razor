@@ -97,7 +97,58 @@ else
 
     @if (_canMutate)
     {
-        <h3>Add a person</h3>
+        <h3>Add an existing person</h3>
+        <p class="text-muted">
+            Link someone who already exists (for example, a relative who is already
+            in another family). This does not create a duplicate person record.
+        </p>
+
+        <div class="row g-2 mb-2">
+            <div class="col-md-6">
+                <input class="form-control" placeholder="Search by name…"
+                       value="@_searchQuery"
+                       @oninput="OnSearchInput" />
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" value="@_existingKind" @onchange="e => _existingKind = e.Value?.ToString() ?? MembershipKinds.Child">
+                    @foreach (var k in MembershipKinds.All)
+                    {
+                        <option value="@k">@k</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        @if (_searchResults.Count == 0)
+        {
+            <p class="text-muted">No matching people you can see.</p>
+        }
+        else
+        {
+            <table class="table">
+                <thead><tr><th>Name</th><th>Date of birth</th><th>Already in this family</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _searchResults)
+                    {
+                        var already = _kinds.ContainsKey(p.Id);
+                        <tr>
+                            <td>@p.FullName</td>
+                            <td>@p.DateOfBirth</td>
+                            <td>@(already ? "Yes" : "—")</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary"
+                                        disabled="@already"
+                                        @onclick="() => AddExistingPerson(p)">
+                                    Add to family
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        <h3>Create a new person</h3>
         <EditForm Model="_newPerson" OnValidSubmit="AddPerson">
             <DataAnnotationsValidator />
             <div class="row g-2">
@@ -144,6 +195,11 @@ else
     private readonly RenameModel _rename = new();
     private readonly NewPersonModel _newPerson = new();
 
+    private string? _searchQuery;
+    private string _existingKind = MembershipKinds.Child;
+    private List<Person> _searchResults = new();
+    private System.Threading.Timer? _searchDebounce;
+
     protected override async Task OnParametersSetAsync()
     {
         var state = await AuthState.GetAuthenticationStateAsync();
@@ -168,6 +224,57 @@ else
         // Visible to every member of this family (Owner, Adult, Viewer).
         _sharedPeople = (await People.GetSharedIntoFamilyAsync(_userId, FamilyId)).ToList();
 
+        foreach (var p in _people)
+        {
+            var m = await PersonFamilies.GetAsync(p.Id, FamilyId);
+            if (m is not null) _kinds[p.Id] = m.MembershipKind;
+        }
+
+        await RefreshSearchAsync();
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        _searchQuery = e.Value?.ToString();
+
+        // Debounce so we don't hit the database on every keystroke.
+        _searchDebounce?.Dispose();
+        _searchDebounce = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await RefreshSearchAsync();
+                StateHasChanged();
+            });
+        }, null, 250, System.Threading.Timeout.Infinite);
+    }
+
+    private async Task RefreshSearchAsync()
+    {
+        if (_userId is null || !_canMutate) return;
+        _searchResults = (await People.SearchVisibleAsync(_userId, _searchQuery)).ToList();
+    }
+
+    private async Task AddExistingPerson(Person p)
+    {
+        if (!_canMutate || _userId is null) return;
+
+        // Defense in depth: only link people the user is authorized to see.
+        var visible = await People.GetVisibleByIdsAsync(_userId, new[] { p.Id });
+        if (visible.Count == 0) return;
+
+        // Do not create a duplicate Person row — just add the membership.
+        await PersonFamilies.AddOrReactivateAsync(p.Id, FamilyId, _existingKind);
+
+        await ReloadPeopleAsync();
+        await RefreshSearchAsync();
+    }
+
+    private async Task ReloadPeopleAsync()
+    {
+        if (_userId is null) return;
+        _people = (await People.GetVisibleForUserInFamilyAsync(_userId, FamilyId)).ToList();
+        _kinds.Clear();
         foreach (var p in _people)
         {
             var m = await PersonFamilies.GetAsync(p.Id, FamilyId);
@@ -209,19 +316,15 @@ else
         };
 
         await People.CreateAsync(person);
-        await PersonFamilies.AddAsync(person.Id, FamilyId, _newPerson.MembershipKind);
+        await PersonFamilies.AddOrReactivateAsync(person.Id, FamilyId, _newPerson.MembershipKind);
 
         _newPerson.FirstName = string.Empty;
         _newPerson.MiddleName = null;
         _newPerson.LastName = string.Empty;
         _newPerson.DateOfBirth = DateTime.Today;
 
-        _people = (await People.GetVisibleForUserInFamilyAsync(_userId!, FamilyId)).ToList();
-        foreach (var p in _people)
-        {
-            var m = await PersonFamilies.GetAsync(p.Id, FamilyId);
-            if (m is not null) _kinds[p.Id] = m.MembershipKind;
-        }
+        await ReloadPeopleAsync();
+        await RefreshSearchAsync();
     }
 
     public class RenameModel { public string Name { get; set; } = string.Empty; }

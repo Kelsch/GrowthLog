@@ -173,6 +173,61 @@ public class PersonRepository
             new { Id = id });
     }
 
+    /// <summary>
+    /// Searches people the user is authorized to see by name (first/last/middle).
+    /// Authorization is enforced in SQL via VisiblePeopleSql — the user can
+    /// never discover people they are not allowed to see.
+    /// </summary>
+    public async Task<IReadOnlyList<Person>> SearchVisibleAsync(string userId, string? query, int limit = 25)
+    {
+        using var connection = _factory.Create();
+        var rows = await connection.QueryAsync<Person>($"""
+            SELECT p.*
+            FROM People p
+            WHERE p.IsDeleted = 0
+              AND p.Id IN ({FamilyAuthorizationService.VisiblePeopleSql})
+              AND (
+                    @Query IS NULL OR @Query = ''
+                 OR p.FirstName LIKE @Like
+                 OR p.LastName  LIKE @Like
+                 OR p.MiddleName LIKE @Like
+                 OR (p.FirstName || ' ' || COALESCE(p.LastName, '')) LIKE @Like
+              )
+            ORDER BY p.FirstName, p.LastName
+            LIMIT @Limit
+            """,
+            new
+            {
+                UserId = userId,
+                Query = query,
+                Like = $"%{query}%",
+                Limit = limit
+            });
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// Returns the given people, but only those the user is authorized to see.
+    /// Used to validate that a person being linked to a family is visible to
+    /// the acting user.
+    /// </summary>
+    public async Task<IReadOnlyList<Person>> GetVisibleByIdsAsync(string userId, IEnumerable<string> personIds)
+    {
+        var ids = personIds.Distinct(StringComparer.Ordinal).ToList();
+        if (ids.Count == 0) return Array.Empty<Person>();
+
+        using var connection = _factory.Create();
+        var rows = await connection.QueryAsync<Person>($"""
+            SELECT p.*
+            FROM People p
+            WHERE p.IsDeleted = 0
+              AND p.Id IN @Ids
+              AND p.Id IN ({FamilyAuthorizationService.VisiblePeopleSql})
+            """,
+            new { UserId = userId, Ids = ids });
+        return rows.ToList();
+    }
+
     public async Task<IReadOnlyList<Person>> GetForFamilyAsync(string familyId)
     {
         using var connection = _factory.Create();

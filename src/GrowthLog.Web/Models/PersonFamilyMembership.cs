@@ -17,3 +17,17 @@ public class PersonFamilyMembership
     public string JoinedUtc { get; set; } = DateTime.UtcNow.ToString("o");
     public bool IsActive { get; set; } = true;
 }
+
+/// <summary>
+/// A person's membership in a family, joined with the family name for display.
+/// </summary>
+public class PersonFamilyMembershipView
+{
+    public string Id { get; set; } = string.Empty;
+    public string PersonId { get; set; } = string.Empty;
+    public string FamilyId { get; set; } = string.Empty;
+    public string FamilyName { get; set; } = string.Empty;
+    public string MembershipKind { get; set; } = string.Empty;
+    public string JoinedUtc { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+}

@@ -35,13 +35,54 @@ else
     </p>
 
     <h2>Families</h2>
-    <ul>
-        @foreach (var m in _memberships)
-        {
-            var fam = _families.GetValueOrDefault(m.FamilyId);
-            <li>@(fam?.Name ?? m.FamilyId) — @m.MembershipKind @(m.IsActive ? "" : "(inactive)")</li>
-        }
-    </ul>
+    @if (_memberships.Count == 0)
+    {
+        <p>This person is not in any family.</p>
+    }
+    else
+    {
+        <ul>
+            @foreach (var m in _memberships)
+            {
+                var fam = _families.GetValueOrDefault(m.FamilyId);
+                <li>
+                    @(fam?.Name ?? m.FamilyId) — @m.MembershipKind @(m.IsActive ? "" : "(inactive)")
+                    @if (_canMutate && m.IsActive && _mutableFamilyIds.Contains(m.FamilyId))
+                    {
+                        <button class="btn btn-sm btn-outline-danger ms-2"
+                                @onclick="() => RemoveFromFamily(m)">Remove from family</button>
+                    }
+                </li>
+            }
+        </ul>
+    }
+
+    @if (_canMutate && _addableFamilies.Count > 0)
+    {
+        <h3>Add to a family</h3>
+        <div class="row g-2">
+            <div class="col-md-4">
+                <select class="form-select" value="@_addFamilyId" @onchange="e => _addFamilyId = e.Value?.ToString()">
+                    <option value="">— select family —</option>
+                    @foreach (var f in _addableFamilies)
+                    {
+                        <option value="@f.Id">@f.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" value="@_addKind" @onchange="e => _addKind = e.Value?.ToString() ?? MembershipKinds.Child">
+                    @foreach (var k in MembershipKinds.All)
+                    {
+                        <option value="@k">@k</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary" @onclick="AddToFamily">Add</button>
+            </div>
+        </div>
+    }
 
     <h2>Relationships</h2>
     @if (_relationships.Count == 0)
@@ -236,6 +277,10 @@ else
     private DateOnly? _dateOfBirth;
     private List<PersonFamilyMembership> _memberships = new();
     private readonly Dictionary<string, Family> _families = new();
+    private readonly HashSet<string> _mutableFamilyIds = new(StringComparer.Ordinal);
+    private List<Family> _addableFamilies = new();
+    private string? _addFamilyId;
+    private string _addKind = MembershipKinds.Child;
     private List<PersonRelationshipView> _relationships = new();
     private List<Person> _candidates = new();
     private List<Measurement> _measurements = new();
@@ -276,6 +321,23 @@ else
             if (fam is not null) _families[m.FamilyId] = fam;
         }
 
+        // Families the user can mutate (Owner/Adult) — used to gate add/remove.
+        _mutableFamilyIds.Clear();
+        foreach (var f in await Families.GetForUserAsync(userId))
+        {
+            if (await Authz.CanMutateFamilyAsync(userId, f.Id))
+            {
+                _mutableFamilyIds.Add(f.Id);
+            }
+        }
+
+        // Families the person is not already an active member of.
+        var activeFamilyIds = _memberships.Where(m => m.IsActive).Select(m => m.FamilyId)
+            .ToHashSet(StringComparer.Ordinal);
+        _addableFamilies = (await Families.GetForUserAsync(userId))
+            .Where(f => _mutableFamilyIds.Contains(f.Id) && !activeFamilyIds.Contains(f.Id))
+            .ToList();
+
         // View if the user can view any family the person belongs to.
         foreach (var m in _memberships.Where(m => m.IsActive))
         {
@@ -308,6 +370,40 @@ else
                 if (seen.Add(p.Id)) _candidates.Add(p);
             }
         }
+    }
+
+    private async Task AddToFamily()
+    {
+        if (!_canMutate || _userId is null || string.IsNullOrEmpty(_addFamilyId)) return;
+        if (!_mutableFamilyIds.Contains(_addFamilyId)) return;
+
+        await PersonFamilies.AddOrReactivateAsync(PersonId, _addFamilyId, _addKind);
+        await Audit.WriteAsync(_userId, "PersonFamilyMembershipAdded", "Person", PersonId);
+
+        // Reload memberships and the addable list.
+        _memberships = (await PersonFamilies.GetForPersonAsync(PersonId)).ToList();
+        var activeFamilyIds = _memberships.Where(m => m.IsActive).Select(m => m.FamilyId)
+            .ToHashSet(StringComparer.Ordinal);
+        _addableFamilies = (await Families.GetForUserAsync(_userId))
+            .Where(f => _mutableFamilyIds.Contains(f.Id) && !activeFamilyIds.Contains(f.Id))
+            .ToList();
+        _addFamilyId = null;
+    }
+
+    private async Task RemoveFromFamily(PersonFamilyMembership m)
+    {
+        if (!_canMutate || _userId is null) return;
+        if (!_mutableFamilyIds.Contains(m.FamilyId)) return;
+
+        await PersonFamilies.DeactivateAsync(PersonId, m.FamilyId);
+        await Audit.WriteAsync(_userId, "PersonFamilyMembershipRemoved", "Person", PersonId);
+
+        _memberships = (await PersonFamilies.GetForPersonAsync(PersonId)).ToList();
+        var activeFamilyIds = _memberships.Where(x => x.IsActive).Select(x => x.FamilyId)
+            .ToHashSet(StringComparer.Ordinal);
+        _addableFamilies = (await Families.GetForUserAsync(_userId))
+            .Where(f => _mutableFamilyIds.Contains(f.Id) && !activeFamilyIds.Contains(f.Id))
+            .ToList();
     }
 
     private async Task AddRelationship()
