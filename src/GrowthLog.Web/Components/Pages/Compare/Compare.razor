@@ -110,6 +110,12 @@ else
 
     private List<Family> _families = new();
     private List<Person> _people = new();
+
+    // PersonId -> set of family IDs that person belongs to (from the
+    // authorization-aware visible-people query). Used to drive the
+    // family/person checkbox linkage.
+    private readonly Dictionary<string, HashSet<string>> _personFamilies = new(StringComparer.Ordinal);
+
     private readonly HashSet<string> _selectedFamilyIds = new(StringComparer.Ordinal);
     private readonly HashSet<string> _selectedPersonIds = new(StringComparer.Ordinal);
 
@@ -126,17 +132,32 @@ else
         foreach (var f in _families) _selectedFamilyIds.Add(f.Id);
 
         var rows = (await People.GetVisiblePeopleWithFamilyAsync(_userId)).ToList();
+
+        // Build a distinct people list keyed by PersonId. A person who belongs
+        // to multiple families appears exactly once, and we record every family
+        // they belong to so the family/person checkboxes can stay in sync.
+        _personFamilies.Clear();
         _people = rows
-            .GroupBy(r => r.Id)
-            .Select(g => new Person
+            .GroupBy(r => r.Id, StringComparer.Ordinal)
+            .Select(g =>
             {
-                Id = g.Key,
-                FirstName = g.First().FirstName,
-                MiddleName = g.First().MiddleName,
-                LastName = g.First().LastName,
-                DateOfBirth = g.First().DateOfBirth
+                var families = g.Select(r => r.FamilyId)
+                    .Where(id => !string.IsNullOrEmpty(id))
+                    .ToHashSet(StringComparer.Ordinal);
+                _personFamilies[g.Key] = families;
+
+                var first = g.First();
+                return new Person
+                {
+                    Id = g.Key,
+                    FirstName = first.FirstName,
+                    MiddleName = first.MiddleName,
+                    LastName = first.LastName,
+                    DateOfBirth = first.DateOfBirth
+                };
             })
             .OrderBy(p => p.FirstName)
+            .ThenBy(p => p.LastName)
             .ToList();
 
         foreach (var p in _people) _selectedPersonIds.Add(p.Id);
@@ -159,8 +180,37 @@ else
 
     private async Task ToggleFamily(string familyId, bool selected)
     {
-        if (selected) _selectedFamilyIds.Add(familyId);
-        else _selectedFamilyIds.Remove(familyId);
+        if (selected)
+        {
+            _selectedFamilyIds.Add(familyId);
+
+            // Auto-check every person who belongs to this family.
+            foreach (var (personId, families) in _personFamilies)
+            {
+                if (families.Contains(familyId))
+                {
+                    _selectedPersonIds.Add(personId);
+                }
+            }
+        }
+        else
+        {
+            _selectedFamilyIds.Remove(familyId);
+
+            // Uncheck people who belonged to this family, unless they still
+            // belong to at least one other family that remains checked.
+            foreach (var (personId, families) in _personFamilies)
+            {
+                if (!families.Contains(familyId)) continue;
+
+                var stillVisible = families.Any(f => _selectedFamilyIds.Contains(f));
+                if (!stillVisible)
+                {
+                    _selectedPersonIds.Remove(personId);
+                }
+            }
+        }
+
         await LoadAsync();
     }
 
@@ -175,10 +225,18 @@ else
     {
         if (_userId is null) return;
 
+        // Only request people who are both selected AND still belong to at
+        // least one selected family. This keeps the chart consistent with the
+        // checkbox state even if a person was left checked by an edge case.
+        var effectivePersonIds = _selectedPersonIds
+            .Where(id => _personFamilies.TryGetValue(id, out var fams)
+                         && fams.Any(f => _selectedFamilyIds.Contains(f)))
+            .ToHashSet(StringComparer.Ordinal);
+
         _series = await Charts.GetSeriesAsync(
             _userId,
             _metric,
-            _selectedPersonIds,
+            effectivePersonIds,
             _selectedFamilyIds);
 
         // Build a simple integer-age table from actual points.
