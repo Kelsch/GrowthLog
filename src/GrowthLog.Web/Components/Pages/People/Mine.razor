@@ -1,0 +1,128 @@
+@page "/people/mine"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@inject PersonRepository People
+@inject PersonFamilyMembershipRepository PersonFamilies
+@inject FamilyRepository Families
+@inject FamilyAuthorizationService Authz
+@inject AuditRepository Audit
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>People I created — GrowthLog</PageTitle>
+
+<h1>People I created</h1>
+<p class="text-muted">
+    People you created are always visible to you, even if they are not currently
+    in any family. Use this page to re-assign or remove them.
+</p>
+
+@if (_rows is null)
+{
+    <p>Loading…</p>
+}
+else if (_rows.Count == 0)
+{
+    <p>You have not created any people yet.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Date of birth</th>
+                <th>Families</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var p in _rows)
+            {
+                <tr>
+                    <td><a href="people/@p.Id">@p.FullName</a></td>
+                    <td>@p.DateOfBirth</td>
+                    <td>
+                        @if (p.ActiveFamilyCount == 0)
+                        {
+                            <span class="badge-unassigned">Unassigned</span>
+                        }
+                        else
+                        {
+                            @p.ActiveFamilyCount
+                        }
+                    </td>
+                    <td>
+                        @if (_mutableFamilies.Count > 0)
+                        {
+                            <select class="form-select form-select-sm d-inline-block"
+                                    style="width:auto;"
+                                    @onchange="e => AddToFamily(p, e.Value?.ToString())">
+                                <option value="">Add to family…</option>
+                                @foreach (var f in _mutableFamilies)
+                                {
+                                    <option value="@f.Id">@f.Name</option>
+                                }
+                            </select>
+                        }
+                        <button class="btn btn-sm btn-outline-danger ms-2"
+                                @onclick="() => SoftDelete(p)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<CreatedPersonRow>? _rows;
+    private List<Family> _mutableFamilies = new();
+    private string? _userId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        _userId = state.User.GetUserId();
+        if (_userId is null) return;
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_userId is null) return;
+
+        _rows = (await People.GetCreatedByUserAsync(_userId)).ToList();
+
+        // Families the user can mutate (Owner/Adult) — used for the add dropdown.
+        _mutableFamilies = new();
+        foreach (var f in await Families.GetForUserAsync(_userId))
+        {
+            if (await Authz.CanMutateFamilyAsync(_userId, f.Id))
+            {
+                _mutableFamilies.Add(f);
+            }
+        }
+    }
+
+    private async Task AddToFamily(CreatedPersonRow p, string? familyId)
+    {
+        if (_userId is null || string.IsNullOrEmpty(familyId)) return;
+
+        // Defense in depth: only add to families the user can mutate.
+        if (!await Authz.CanMutateFamilyAsync(_userId, familyId)) return;
+
+        await PersonFamilies.AddOrReactivateAsync(p.Id, familyId, MembershipKinds.Child);
+        await Audit.WriteAsync(_userId, "PersonFamilyMembershipAdded", "Person", p.Id);
+        await LoadAsync();
+    }
+
+    private async Task SoftDelete(CreatedPersonRow p)
+    {
+        if (_userId is null) return;
+
+        await People.SoftDeleteAsync(p.Id);
+        await Audit.WriteAsync(_userId, "PersonDeleted", "Person", p.Id);
+        await LoadAsync();
+    }
+}

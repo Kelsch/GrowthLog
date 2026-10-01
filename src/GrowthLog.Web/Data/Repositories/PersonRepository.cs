@@ -34,6 +34,35 @@ public class VisiblePersonRow
     }
 }
 
+/// <summary>
+/// A person created by the current user, with a count of active family
+/// memberships so the UI can highlight unassigned people.
+/// </summary>
+public class CreatedPersonRow
+{
+    public string Id { get; set; } = string.Empty;
+    public string? UserId { get; set; }
+    public string FirstName { get; set; } = string.Empty;
+    public string? MiddleName { get; set; }
+    public string? LastName { get; set; }
+    public string DateOfBirth { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
+    public string CreatedUtc { get; set; } = string.Empty;
+    public string? CreatedByUserId { get; set; }
+    public bool IsDeleted { get; set; }
+    public int ActiveFamilyCount { get; set; }
+
+    public string FullName
+    {
+        get
+        {
+            var parts = new[] { FirstName, MiddleName, LastName }
+                .Where(p => !string.IsNullOrWhiteSpace(p));
+            return string.Join(" ", parts);
+        }
+    }
+}
+
 public class PersonRepository
 {
     private readonly IDbConnectionFactory _factory;
@@ -248,10 +277,42 @@ public class PersonRepository
     {
         using var connection = _factory.Create();
         await connection.ExecuteAsync("""
-            INSERT INTO People (Id, UserId, FirstName, MiddleName, LastName, DateOfBirth, AvatarUrl, CreatedUtc, IsDeleted)
-            VALUES (@Id, @UserId, @FirstName, @MiddleName, @LastName, @DateOfBirth, @AvatarUrl, @CreatedUtc, 0)
+            INSERT INTO People (Id, UserId, FirstName, MiddleName, LastName, DateOfBirth, AvatarUrl, CreatedUtc, CreatedByUserId, IsDeleted)
+            VALUES (@Id, @UserId, @FirstName, @MiddleName, @LastName, @DateOfBirth, @AvatarUrl, @CreatedUtc, @CreatedByUserId, 0)
             """, person);
         return person.Id;
+    }
+
+    /// <summary>
+    /// Returns people created by the given user, together with the number of
+    /// active family memberships each has. Used by the "People I created" page
+    /// to surface unassigned people.
+    /// </summary>
+    public async Task<IReadOnlyList<CreatedPersonRow>> GetCreatedByUserAsync(string userId)
+    {
+        using var connection = _factory.Create();
+        var rows = await connection.QueryAsync<CreatedPersonRow>("""
+            SELECT
+                p.Id,
+                p.UserId,
+                p.FirstName,
+                p.MiddleName,
+                p.LastName,
+                p.DateOfBirth,
+                p.AvatarUrl,
+                p.CreatedUtc,
+                p.CreatedByUserId,
+                p.IsDeleted,
+                (SELECT COUNT(1)
+                 FROM PersonFamilyMembership pfm
+                 WHERE pfm.PersonId = p.Id AND pfm.IsActive = 1) AS ActiveFamilyCount
+            FROM People p
+            WHERE p.IsDeleted = 0
+              AND p.CreatedByUserId = @UserId
+            ORDER BY p.FirstName, p.LastName
+            """,
+            new { UserId = userId });
+        return rows.ToList();
     }
 
     public async Task UpdateAsync(Person person)

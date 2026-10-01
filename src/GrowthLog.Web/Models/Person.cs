@@ -10,6 +10,7 @@ public class Person
     public string DateOfBirth { get; set; } = string.Empty; // YYYY-MM-DD
     public string? AvatarUrl { get; set; }
     public string CreatedUtc { get; set; } = DateTime.UtcNow.ToString("o");
+    public string? CreatedByUserId { get; set; }
     public bool IsDeleted { get; set; }
 
     public string FullName

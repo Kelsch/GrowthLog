@@ -312,7 +312,8 @@ else
             FirstName = _newPerson.FirstName,
             MiddleName = _newPerson.MiddleName,
             LastName = _newPerson.LastName,
-            DateOfBirth = _newPerson.DateOfBirth.ToString("yyyy-MM-dd")
+            DateOfBirth = _newPerson.DateOfBirth.ToString("yyyy-MM-dd"),
+            CreatedByUserId = _userId
         };
 
         await People.CreateAsync(person);

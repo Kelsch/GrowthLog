@@ -97,6 +97,10 @@ public class FamilyAuthorizationService
             )
             -- Rule 2: person is linked to the user's own account.
             OR p.UserId = @UserId
+            -- Rule 3: person was created by the user. This keeps people the
+            -- user created visible even when they have no active family
+            -- membership (e.g. an orphaned/unassigned person).
+            OR p.CreatedByUserId = @UserId
             -- Rule 4: person is in a Source family of an active connection
             -- whose Target family the user belongs to, and that connection
             -- has a granted permission matching the person's membership kind.
