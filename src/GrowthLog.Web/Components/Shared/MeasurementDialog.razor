@@ -1,0 +1,172 @@
+@* Modal for adding a measurement without leaving the current page.
+   Prefills today's date and shows the person's age from their DOB. *@
+
+@if (IsOpen && Person is not null)
+{
+    <div class="modal-backdrop" @onclick="Close"></div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="measurement-dialog-title">
+        <div class="modal-header">
+            <h3 id="measurement-dialog-title">Add measurement</h3>
+            <button type="button" class="btn-link" aria-label="Close" @onclick="Close">✕</button>
+        </div>
+
+        <p class="text-muted">
+            @Person.FullName
+            @if (_ageText is not null)
+            {
+                <span> · @_ageText</span>
+            }
+        </p>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        <EditForm Model="_model" OnValidSubmit="Save">
+            <DataAnnotationsValidator />
+
+            <div class="mb-3">
+                <label class="form-label" for="md-date">Date</label>
+                <InputDate id="md-date" @bind-Value="_model.Date" class="form-control" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="md-height">Height (cm)</label>
+                <InputNumber id="md-height" @bind-Value="_model.HeightCm" class="form-control" step="0.1" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="md-weight">Weight (kg)</label>
+                <InputNumber id="md-weight" @bind-Value="_model.WeightKg" class="form-control" step="0.1" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="md-notes">Notes</label>
+                <InputTextArea id="md-notes" @bind-Value="_model.Notes" class="form-control" rows="2" />
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline-secondary" @onclick="Close">Cancel</button>
+                <button type="submit" class="btn btn-primary" disabled="@_saving">
+                    @(_saving ? "Saving…" : "Save measurement")
+                </button>
+            </div>
+        </EditForm>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public Person? Person { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    [Inject] private MeasurementRepository Measurements { get; set; } = default!;
+    [Inject] private AuditRepository Audit { get; set; } = default!;
+    [Inject] private AuthenticationStateProvider AuthState { get; set; } = default!;
+
+    private readonly EntryModel _model = new();
+    private bool _saving;
+    private string? _error;
+    private string? _ageText;
+
+    protected override void OnParametersSet()
+    {
+        if (IsOpen && Person is not null)
+        {
+            // Smart defaults: today's date, empty values, age from DOB.
+            _model.Date = DateTime.Today;
+            _model.HeightCm = null;
+            _model.WeightKg = null;
+            _model.Notes = null;
+            _error = null;
+
+            if (DateOnly.TryParse(Person.DateOfBirth, out var dob))
+            {
+                var age = AgeCalculator.GetAgeYears(dob, DateOnly.FromDateTime(DateTime.Today));
+                _ageText = $"Age {age:0.#}";
+            }
+            else
+            {
+                _ageText = null;
+            }
+        }
+    }
+
+    private async Task Close()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task Save()
+    {
+        if (Person is null) return;
+
+        _error = null;
+
+        if (_model.HeightCm is null && _model.WeightKg is null)
+        {
+            _error = "Enter a height or a weight.";
+            return;
+        }
+
+        if (_model.HeightCm is <= 0)
+        {
+            _error = "Height must be greater than 0.";
+            return;
+        }
+
+        if (_model.WeightKg is <= 0)
+        {
+            _error = "Weight must be greater than 0.";
+            return;
+        }
+
+        if (DateOnly.TryParse(Person.DateOfBirth, out var dob)
+            && DateOnly.FromDateTime(_model.Date) < dob)
+        {
+            _error = "This measurement is dated before the person's birth date.";
+            return;
+        }
+
+        var state = await AuthState.GetAuthenticationStateAsync();
+        var userId = state.User.GetUserId();
+        if (userId is null)
+        {
+            _error = "You must be signed in.";
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var measurement = new Measurement
+            {
+                PersonId = Person.Id,
+                MeasurementDate = _model.Date.ToString("yyyy-MM-dd"),
+                HeightCm = _model.HeightCm,
+                WeightKg = _model.WeightKg,
+                Notes = string.IsNullOrWhiteSpace(_model.Notes) ? null : _model.Notes,
+                EnteredByUserId = userId
+            };
+
+            await Measurements.CreateAsync(measurement);
+            await Audit.WriteAsync(userId, "MeasurementCreated", "Measurement", measurement.Id);
+
+            await OnSaved.InvokeAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    public class EntryModel
+    {
+        public DateTime Date { get; set; } = DateTime.Today;
+        public double? HeightCm { get; set; }
+        public double? WeightKg { get; set; }
+        public string? Notes { get; set; }
+    }
+}

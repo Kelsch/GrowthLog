@@ -1,0 +1,54 @@
+@* Compact card showing a person's yearly measurement due status with a
+   direct "Add measurement" action. *@
+
+<div class="upcoming-card @StatusClass">
+    <div class="upcoming-card-main">
+        <div class="upcoming-card-name">
+            <a href="people/@PersonId">@PersonName</a>
+        </div>
+        <div class="upcoming-card-meta">
+            @if (AgeYears is not null)
+            {
+                <span>Age @AgeYears.Value.ToString("0.#")</span>
+                <span class="dot">·</span>
+            }
+            <span>@Birthday.ToString("MMMM d")</span>
+        </div>
+        <div class="upcoming-card-status">@StatusText</div>
+        <div class="upcoming-card-last">
+            @if (!string.IsNullOrEmpty(LastMeasurementDate))
+            {
+                <span>Last measured @LastMeasurementDate</span>
+            }
+            else
+            {
+                <span>No measurement history</span>
+            }
+        </div>
+    </div>
+    <div class="upcoming-card-action">
+        <button class="btn btn-sm btn-primary" @onclick="OnAddMeasurement">
+            + Add measurement
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string PersonId { get; set; } = string.Empty;
+    [Parameter] public string PersonName { get; set; } = string.Empty;
+    [Parameter] public double? AgeYears { get; set; }
+    [Parameter] public DateOnly Birthday { get; set; }
+    [Parameter] public string Status { get; set; } = MeasurementDueStatuses.Upcoming;
+    [Parameter] public string StatusText { get; set; } = string.Empty;
+    [Parameter] public string? LastMeasurementDate { get; set; }
+    [Parameter] public EventCallback OnAddMeasurement { get; set; }
+
+    private string StatusClass => Status switch
+    {
+        MeasurementDueStatuses.Overdue => "status-overdue",
+        MeasurementDueStatuses.DueToday => "status-due-today",
+        MeasurementDueStatuses.DueSoon => "status-due-soon",
+        MeasurementDueStatuses.Completed => "status-completed",
+        _ => "status-upcoming"
+    };
+}

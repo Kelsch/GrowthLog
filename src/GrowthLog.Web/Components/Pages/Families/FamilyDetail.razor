@@ -35,6 +35,30 @@ else
         </EditForm>
     }
 
+    <h2>Upcoming measurements</h2>
+    <p class="text-muted">Keep track of birthdays and yearly growth measurements.</p>
+    @if (_upcoming.Count == 0)
+    {
+        <p>Everyone is caught up. Your next birthday measurement will appear here automatically.</p>
+    }
+    else
+    {
+        <div class="upcoming-list">
+            @foreach (var u in _upcoming)
+            {
+                <UpcomingMeasurementCard
+                    PersonId="@u.PersonId"
+                    PersonName="@u.PersonName"
+                    AgeYears="@u.AgeYears"
+                    Birthday="@u.Birthday"
+                    Status="@u.Status"
+                    StatusText="@u.StatusText"
+                    LastMeasurementDate="@u.LastMeasurementDate"
+                    OnAddMeasurement="() => OpenDialog(u.PersonId)" />
+            }
+        </div>
+    }
+
     <h2>Members (users)</h2>
     <table class="table">
         <thead><tr><th>User</th><th>Role</th><th></th></tr></thead>
@@ -94,6 +118,11 @@ else
             </tbody>
         </table>
     }
+
+    <MeasurementDialog IsOpen="_dialogOpen"
+                       Person="_dialogPerson"
+                       OnClose="CloseDialog"
+                       OnSaved="OnMeasurementSaved" />
 
     @if (_canMutate)
     {
@@ -200,6 +229,10 @@ else
     private List<Person> _searchResults = new();
     private System.Threading.Timer? _searchDebounce;
 
+    private List<UpcomingRow> _upcoming = new();
+    private bool _dialogOpen;
+    private Person? _dialogPerson;
+
     protected override async Task OnParametersSetAsync()
     {
         var state = await AuthState.GetAuthenticationStateAsync();
@@ -230,7 +263,77 @@ else
             if (m is not null) _kinds[p.Id] = m.MembershipKind;
         }
 
+        await LoadUpcomingAsync();
         await RefreshSearchAsync();
+    }
+
+    private async Task LoadUpcomingAsync()
+    {
+        if (_userId is null) return;
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var measurements = await Measurements.GetVisibleForUserForPersonAsync(_userId, string.Empty);
+        // GetVisibleForUserForPersonAsync with an empty id returns nothing, so
+        // load per-person instead (family sizes are small).
+        var lastByPerson = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var p in _people)
+        {
+            var ms = await Measurements.GetVisibleForUserForPersonAsync(_userId, p.Id);
+            var latest = ms.OrderByDescending(m => m.MeasurementDate).FirstOrDefault();
+            if (latest is not null) lastByPerson[p.Id] = latest.MeasurementDate;
+        }
+
+        _upcoming = new();
+        foreach (var p in _people)
+        {
+            if (!DateOnly.TryParse(p.DateOfBirth, out var dob)) continue;
+
+            var due = MeasurementDueCalculator.Evaluate(
+                dob,
+                lastByPerson.TryGetValue(p.Id, out var d) ? d : null,
+                today);
+
+            if (due.Status == MeasurementDueStatuses.Completed) continue;
+
+            _upcoming.Add(new UpcomingRow
+            {
+                PersonId = p.Id,
+                PersonName = p.FullName,
+                AgeYears = AgeCalculator.GetAgeYears(dob, today),
+                Birthday = due.NextBirthday,
+                Status = due.Status,
+                StatusText = due.StatusText,
+                LastMeasurementDate = due.LastMeasurementDate,
+                SortKey = MeasurementDueCalculator.SortKey(due),
+                DaysUntilDue = due.DaysUntilDue
+            });
+        }
+
+        _upcoming = _upcoming
+            .OrderBy(u => u.SortKey)
+            .ThenBy(u => u.DaysUntilDue)
+            .ThenBy(u => u.PersonName)
+            .ToList();
+    }
+
+    private void OpenDialog(string personId)
+    {
+        var p = _people.FirstOrDefault(x => x.Id == personId);
+        if (p is null) return;
+        _dialogPerson = p;
+        _dialogOpen = true;
+    }
+
+    private void CloseDialog()
+    {
+        _dialogOpen = false;
+        _dialogPerson = null;
+    }
+
+    private async Task OnMeasurementSaved()
+    {
+        CloseDialog();
+        await LoadUpcomingAsync();
     }
 
     private void OnSearchInput(ChangeEventArgs e)
@@ -326,6 +429,19 @@ else
 
         await ReloadPeopleAsync();
         await RefreshSearchAsync();
+    }
+
+    private class UpcomingRow
+    {
+        public string PersonId { get; set; } = string.Empty;
+        public string PersonName { get; set; } = string.Empty;
+        public double AgeYears { get; set; }
+        public DateOnly Birthday { get; set; }
+        public string Status { get; set; } = MeasurementDueStatuses.Upcoming;
+        public string StatusText { get; set; } = string.Empty;
+        public string? LastMeasurementDate { get; set; }
+        public int SortKey { get; set; }
+        public int DaysUntilDue { get; set; }
     }
 
     public class RenameModel { public string Name { get; set; } = string.Empty; }

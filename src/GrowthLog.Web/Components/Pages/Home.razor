@@ -21,28 +21,27 @@ else
     <p class="text-muted">See how your family grows.</p>
 
     <h2>Upcoming measurements</h2>
+    <p class="text-muted">Keep track of birthdays and yearly growth measurements.</p>
     @if (_upcoming.Count == 0)
     {
-        <p>No upcoming birthdays in the next 60 days.</p>
+        <p>Everyone is caught up. Your next birthday measurement will appear here automatically.</p>
     }
     else
     {
-        <table class="table">
-            <thead>
-                <tr><th>Person</th><th>Birthday</th><th>Last measurement</th><th></th></tr>
-            </thead>
-            <tbody>
-                @foreach (var u in _upcoming)
-                {
-                    <tr>
-                        <td><a href="people/@u.PersonId">@u.PersonName</a></td>
-                        <td>@u.Birthday.ToString("MMMM d")</td>
-                        <td>@(u.LastMeasurementDate ?? "—")</td>
-                        <td><a class="btn btn-sm btn-primary" href="people/@u.PersonId">Record measurement</a></td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+        <div class="upcoming-list">
+            @foreach (var u in _upcoming)
+            {
+                <UpcomingMeasurementCard
+                    PersonId="@u.PersonId"
+                    PersonName="@u.PersonName"
+                    AgeYears="@u.AgeYears"
+                    Birthday="@u.Birthday"
+                    Status="@u.Status"
+                    StatusText="@u.StatusText"
+                    LastMeasurementDate="@u.LastMeasurementDate"
+                    OnAddMeasurement="() => OpenDialog(u.PersonId)" />
+            }
+        </div>
     }
 
     <h2>Recent measurements</h2>
@@ -99,6 +98,11 @@ else
     <p class="mt-4">
         <a class="btn btn-outline-primary" href="compare">Compare growth</a>
     </p>
+
+    <MeasurementDialog IsOpen="_dialogOpen"
+                       Person="_dialogPerson"
+                       OnClose="CloseDialog"
+                       OnSaved="OnMeasurementSaved" />
 }
 
 @code {
@@ -109,29 +113,43 @@ else
     private List<UpcomingRow> _upcoming = new();
     private List<RecentRow> _recent = new();
 
+    private bool _dialogOpen;
+    private Person? _dialogPerson;
+    private string? _userId;
+    private List<VisiblePersonRow> _visibleRows = new();
+    private List<Measurement> _allMeasurements = new();
+
     protected override async Task OnInitializedAsync()
     {
         var state = await AuthState.GetAuthenticationStateAsync();
-        var userId = state.User.GetUserId();
-        if (userId is null) return;
+        _userId = state.User.GetUserId();
+        if (_userId is null) return;
 
-        var user = await UserManager.FindByIdAsync(userId);
+        var user = await UserManager.FindByIdAsync(_userId);
         _unitSystem = user?.PreferredUnitSystem ?? "Imperial";
 
-        _ownFamilies = (await Families.GetForUserAsync(userId)).ToList();
+        await LoadAsync();
+        _loading = false;
+    }
 
-        var rows = (await People.GetVisiblePeopleWithFamilyAsync(userId)).ToList();
-        _sharedFamilies = rows.Where(r => r.IsShared)
+    private async Task LoadAsync()
+    {
+        if (_userId is null) return;
+
+        _ownFamilies = (await Families.GetForUserAsync(_userId)).ToList();
+
+        _visibleRows = (await People.GetVisiblePeopleWithFamilyAsync(_userId)).ToList();
+        _sharedFamilies = _visibleRows.Where(r => r.IsShared)
             .Select(r => r.FamilyName)
             .Distinct()
             .OrderBy(n => n)
             .ToList();
 
         // Recent measurements (authorization-aware).
-        var measurements = await Measurements.GetVisibleForUserAsync(userId);
-        var peopleById = rows.GroupBy(r => r.Id).ToDictionary(g => g.Key, g => g.First());
+        _allMeasurements = (await Measurements.GetVisibleForUserAsync(_userId)).ToList();
+        var peopleById = _visibleRows.GroupBy(r => r.Id).ToDictionary(g => g.Key, g => g.First());
 
-        _recent = measurements
+        _recent = _allMeasurements
             .OrderByDescending(m => m.MeasurementDate)
             .Take(10)
             .Select(m => new RecentRow
@@ -144,9 +162,9 @@ else
             })
             .ToList();
 
-        // Upcoming birthdays within the next 60 days.
+        // Upcoming / due / overdue measurements for every visible person.
         var today = DateOnly.FromDateTime(DateTime.Today);
-        var lastByPerson = measurements
+        var lastByPerson = _allMeasurements
             .GroupBy(m => m.PersonId)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(m => m.MeasurementDate).First().MeasurementDate);
 
@@ -155,36 +173,76 @@ else
         {
             if (!DateOnly.TryParse(p.DateOfBirth, out var dob)) continue;
 
-            var next = NextBirthday(dob, today);
-            var days = next.DayNumber - today.DayNumber;
-            if (days < 0 || days > 60) continue;
+            var due = MeasurementDueCalculator.Evaluate(
+                dob,
+                lastByPerson.TryGetValue(p.Id, out var d) ? d : null,
+                today);
+
+            // Only surface people who are not already measured this year.
+            if (due.Status == MeasurementDueStatuses.Completed) continue;
+
+            var age = AgeCalculator.GetAgeYears(dob, today);
 
             _upcoming.Add(new UpcomingRow
             {
                 PersonId = p.Id,
                 PersonName = p.FullName,
-                Birthday = next,
-                LastMeasurementDate = lastByPerson.TryGetValue(p.Id, out var d) ? d : null
+                AgeYears = age,
+                Birthday = due.NextBirthday,
+                Status = due.Status,
+                StatusText = due.StatusText,
+                LastMeasurementDate = due.LastMeasurementDate,
+                SortKey = MeasurementDueCalculator.SortKey(due),
+                DaysUntilDue = due.DaysUntilDue
             });
         }
-        _upcoming = _upcoming.OrderBy(u => u.Birthday).ToList();
 
-        _loading = false;
+        _upcoming = _upcoming
+            .OrderBy(u => u.SortKey)
+            .ThenBy(u => u.DaysUntilDue)
+            .ThenBy(u => u.PersonName)
+            .ToList();
     }
 
-    private static DateOnly NextBirthday(DateOnly dob, DateOnly today)
+    private void OpenDialog(string personId)
     {
-        var candidate = new DateOnly(today.Year, dob.Month, dob.Day);
-        if (candidate < today) candidate = new DateOnly(today.Year + 1, dob.Month, dob.Day);
-        return candidate;
+        var row = _visibleRows.FirstOrDefault(r => r.Id == personId);
+        if (row is null) return;
+
+        _dialogPerson = new Person
+        {
+            Id = row.Id,
+            FirstName = row.FirstName,
+            MiddleName = row.MiddleName,
+            LastName = row.LastName,
+            DateOfBirth = row.DateOfBirth
+        };
+        _dialogOpen = true;
+    }
+
+    private void CloseDialog()
+    {
+        _dialogOpen = false;
+        _dialogPerson = null;
+    }
+
+    private async Task OnMeasurementSaved()
+    {
+        CloseDialog();
+        await LoadAsync();
     }
 
     private class UpcomingRow
     {
         public string PersonId { get; set; } = string.Empty;
         public string PersonName { get; set; } = string.Empty;
+        public double AgeYears { get; set; }
         public DateOnly Birthday { get; set; }
+        public string Status { get; set; } = MeasurementDueStatuses.Upcoming;
+        public string StatusText { get; set; } = string.Empty;
         public string? LastMeasurementDate { get; set; }
+        public int SortKey { get; set; }
+        public int DaysUntilDue { get; set; }
     }
 
     private class RecentRow

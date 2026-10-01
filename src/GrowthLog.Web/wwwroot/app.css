@@ -387,6 +387,121 @@ main {
     color: var(--muted);
 }
 
+/* GrowthLog modal */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 1000;
+}
+
+.modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--surface);
+    border-radius: 14px;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
+    padding: 1.5rem;
+    width: calc(100% - 2rem);
+    max-width: 460px;
+    z-index: 1001;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.modal-header h3 {
+    margin: 0;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+/* GrowthLog upcoming measurement cards */
+.upcoming-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.upcoming-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.upcoming-card.status-overdue { border-left-color: #dc2626; }
+.upcoming-card.status-due-today { border-left-color: #ea580c; }
+.upcoming-card.status-due-soon { border-left-color: #d97706; }
+.upcoming-card.status-upcoming { border-left-color: #2563eb; }
+.upcoming-card.status-completed { border-left-color: #16a34a; }
+
+.upcoming-card-name {
+    font-weight: 600;
+}
+
+.upcoming-card-meta {
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.upcoming-card-meta .dot {
+    margin: 0 0.35rem;
+}
+
+.upcoming-card-status {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-top: 0.15rem;
+}
+
+.status-overdue .upcoming-card-status { color: #dc2626; }
+.status-due-today .upcoming-card-status { color: #ea580c; }
+.status-due-soon .upcoming-card-status { color: #d97706; }
+.status-upcoming .upcoming-card-status { color: #2563eb; }
+.status-completed .upcoming-card-status { color: #16a34a; }
+
+.upcoming-card-last {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 0.15rem;
+}
+
+.upcoming-card-action {
+    flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+    .upcoming-card {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .upcoming-card-action .btn {
+        width: 100%;
+    }
+}
+
 /* GrowthLog misc */
 .badge-unassigned {
     display: inline-block;
