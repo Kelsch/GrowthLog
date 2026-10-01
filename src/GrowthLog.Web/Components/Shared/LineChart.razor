@@ -22,8 +22,7 @@
                 var y = YToPixel(tick);
                 <line x1="@PadLeft" y1="@y" x2="@(Width - PadRight)" y2="@y"
                       stroke="#eee" stroke-width="1" />
-                <text x="@(PadLeft - 6)" y="@(y + 4)" text-anchor="end"
-                      font-size="11" fill="#666">@FormatY(tick)</text>
+                @((MarkupString)$"<text x=\"{Fmt(PadLeft - 6)}\" y=\"{Fmt(y + 4)}\" text-anchor=\"end\" font-size=\"11\" fill=\"#666\">{FormatY(tick)}</text>")
             }
 
             @* X gridlines + labels *@
@@ -32,8 +31,7 @@
                 var x = XToPixel(tick);
                 <line x1="@x" y1="@PadTop" x2="@x" y2="@(Height - PadBottom)"
                       stroke="#f4f4f4" stroke-width="1" />
-                <text x="@x" y="@(Height - PadBottom + 16)" text-anchor="middle"
-                      font-size="11" fill="#666">@FormatX(tick)</text>
+                @((MarkupString)$"<text x=\"{Fmt(x)}\" y=\"{Fmt(Height - PadBottom + 16)}\" text-anchor=\"middle\" font-size=\"11\" fill=\"#666\">{FormatX(tick)}</text>")
             }
 
             @* Series *@
@@ -144,6 +142,9 @@
             }
         }
     }
+
+    private static string Fmt(double v)
+        => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 
     private string FormatY(double v)
         => YUnit == "kg"
