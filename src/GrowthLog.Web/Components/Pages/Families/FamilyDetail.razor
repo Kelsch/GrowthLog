@@ -80,19 +80,35 @@ else
         </div>
     }
 
-    <h2>People in this family</h2>
+    <div class="section-header">
+        <h2>People in this family</h2>
+        @if (_canMutate)
+        {
+            <button type="button" class="btn btn-sm btn-primary" @onclick="ToggleAddPanel">
+                @(_addPanelOpen ? "− Add a person" : "+ Add a person")
+            </button>
+        }
+    </div>
+
+    @if (_canMutate && _addPanelOpen)
+    {
+        <AddPersonPanel FamilyId="@FamilyId"
+                        UserId="@_userId"
+                        CurrentMemberIds="@_people.Select(p => p.Id).ToHashSet()"
+                        OnChanged="OnPeopleChanged" />
+    }
 
     <div class="people-toolbar">
         <div class="people-filters">
-            @* <button class="filter-chip @(_filter == "all" ? "active" : "")" @onclick="(() => SetFilter(" all"))">All</button> *@
-            @* <button class="filter-chip @(_filter == "adults" ? "active" : "")" @onclick="(() => SetFilter(" adults"))">Adults</button> *@
-            @* <button class="filter-chip @(_filter == "children" ? "active" : "")" @onclick="(() => SetFilter(" children"))">Children</button> *@
+            <button class="filter-chip @(_filter == "all" ? "active" : "")" @onclick="() => SetFilter("all")">All</button>
+            <button class="filter-chip @(_filter == "adults" ? "active" : "")" @onclick="() => SetFilter("adults")">Adults</button>
+            <button class="filter-chip @(_filter == "children" ? "active" : "")" @onclick="() => SetFilter("children")">Children</button>
         </div>
-        @* <div class="people-search">
+        <div class="people-search">
             <input class="form-control" placeholder="Search people…"
                    value="@_peopleSearch"
-                   @oninput="((e) => _peopleSearch = e.Value?.ToString())" />
-        </div> *@
+                   @oninput="e => _peopleSearch = e.Value?.ToString()" />
+        </div>
     </div>
 
     @if (_filteredPeople.Count == 0)
@@ -121,14 +137,6 @@ else
                     OnRemove="() => RemovePerson(p)" />
             }
         </div>
-    }
-
-    @if (_canMutate)
-    {
-        <AddPersonPanel FamilyId="@FamilyId"
-                        UserId="@_userId"
-                        CurrentMemberIds="@_people.Select(p => p.Id).ToHashSet()"
-                        OnChanged="OnPeopleChanged" />
     }
 
     @if (_sharedPeople.Count > 0)
@@ -199,8 +207,11 @@ else
 
     private string _filter = "all";
     private string? _peopleSearch;
+    private bool _addPanelOpen;
 
     private void SetFilter(string filter) => _filter = filter;
+
+    private void ToggleAddPanel() => _addPanelOpen = !_addPanelOpen;
 
     private List<UpcomingRow> _upcoming = new();
     private bool _dialogOpen;
@@ -354,6 +365,7 @@ else
     {
         await ReloadPeopleAsync();
         await LoadUpcomingAsync();
+        _addPanelOpen = false;
     }
 
     private async Task Rename()

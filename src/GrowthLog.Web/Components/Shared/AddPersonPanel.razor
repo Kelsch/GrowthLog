@@ -2,25 +2,19 @@
    leaving the page. Two modes: link an existing person, or create a new one. *@
 
 <div class="add-person-panel">
-    <button type="button" class="btn btn-outline-secondary" @onclick="Toggle">
-        @(_expanded ? "− Add a person" : "+ Add a person")
-    </button>
-
-    @if (_expanded)
-    {
-        <div class="add-person-body">
-            <div class="add-person-tabs">
-                <button type="button"
-                        class="add-person-tab @(_mode == "existing" ? "active" : "")"
-                        @onclick="(() => SetMode("existing"))">
-                    Add existing person
-                </button>
-                <button type="button"
-                        class="add-person-tab @(_mode == "new" ? "active" : "")"
-                        @onclick="(() => SetMode("new"))">
-                    Create new person
-                </button>
-            </div>
+    <div class="add-person-body">
+        <div class="add-person-tabs">
+            <button type="button"
+                    class="add-person-tab @(_mode == "existing" ? "active" : "")"
+                    @onclick="() => SetMode("existing")">
+                Add existing person
+            </button>
+            <button type="button"
+                    class="add-person-tab @(_mode == "new" ? "active" : "")"
+                    @onclick="() => SetMode("new")">
+                Create new person
+            </button>
+        </div>
 
             @if (!string.IsNullOrEmpty(_message))
             {
@@ -116,8 +110,7 @@
                     </div>
                 </EditForm>
             }
-        </div>
-    }
+    </div>
 </div>
 
 @code {
@@ -130,7 +123,6 @@
     [Inject] private PersonFamilyMembershipRepository PersonFamilies { get; set; } = default!;
     [Inject] private AuditRepository Audit { get; set; } = default!;
 
-    private bool _expanded;
     private string _mode = "existing";
     private string? _message;
 
@@ -144,12 +136,6 @@
     protected override async Task OnInitializedAsync()
     {
         await RefreshSearchAsync();
-    }
-
-    private void Toggle()
-    {
-        _expanded = !_expanded;
-        _message = null;
     }
 
     private void SetMode(string mode) => _mode = mode;
