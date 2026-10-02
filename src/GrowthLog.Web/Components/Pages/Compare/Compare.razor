@@ -99,7 +99,7 @@ else
     <div class="compare-chart-area">
     @if (_mode == CompareModes.SameAge)
     {
-        <h2>@_metric at age @_selectedAge.ToString("0.#")</h2>
+        <h2 class="compare-chart-title">@_metric at age @_selectedAge.ToString("0.#")</h2>
 
         <div class="same-age-controls mb-3">
             <label class="form-label" for="age-slider">Age (years)</label>
@@ -161,7 +161,7 @@ else
     }
     else
     {
-        <h2>@_metric over @(_xAxis == ChartXAxisModes.Age ? "age" : "date")</h2>
+        <h2 class="compare-chart-title">@_metric over @(_xAxis == ChartXAxisModes.Age ? "age" : "date")</h2>
         @if (_series.Count > MaxTrajectoryPeople)
         {
             <p class="text-muted">
@@ -609,6 +609,11 @@ else
 
     .compare-chart-area {
         margin-bottom: 1rem;
+    }
+
+    .compare-chart-title {
+        margin-top: 0.25rem;
+        margin-bottom: 0.5rem;
     }
 
     .same-age-plot {
