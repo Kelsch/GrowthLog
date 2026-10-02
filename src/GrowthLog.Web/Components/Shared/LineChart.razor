@@ -38,16 +38,18 @@
             @foreach (var s in Series)
             {
                 var color = ColorFor(s.PersonId);
+                var muted = HighlightedPersonId is not null && HighlightedPersonId != s.PersonId;
                 var pts = s.Points.OrderBy(p => p.X).ToList();
                 if (pts.Count > 1)
                 {
-                    <polyline fill="none" stroke="@color" stroke-width="2"
+                    <polyline fill="none" stroke="@color" stroke-width="@(muted ? 1 : 2)"
+                              stroke-opacity="@(muted ? 0.2 : 1)"
                               points="@PolylinePoints(pts)" />
                 }
                 @foreach (var p in pts)
                 {
-                    <circle cx="@XToPixel(p.X)" cy="@YToPixel(p.Y)" r="3.5"
-                            fill="@color">
+                    <circle cx="@XToPixel(p.X)" cy="@YToPixel(p.Y)" r="@(muted ? 2.5 : 4)"
+                            fill="@color" fill-opacity="@(muted ? 0.25 : 1)">
                         <title>@s.PersonName — @p.MeasurementDate: @FormatY(p.Y)</title>
                     </circle>
                 }
@@ -57,10 +59,14 @@
         <div class="chart-legend">
             @foreach (var s in Series.Where(s => s.Points.Count > 0))
             {
-                <span class="legend-item">
+                var isHighlighted = HighlightedPersonId == s.PersonId;
+                var isMuted = HighlightedPersonId is not null && !isHighlighted;
+                <button type="button"
+                        class="legend-item @(isHighlighted ? "legend-item-active" : "") @(isMuted ? "legend-item-muted" : "")"
+                        @onclick="() => OnLegendClick.InvokeAsync(s.PersonId)">
                     <span class="legend-swatch" style="background:@ColorFor(s.PersonId)"></span>
                     @s.PersonName
-                </span>
+                </button>
             }
         </div>
     }
@@ -70,6 +76,9 @@
     [Parameter] public IReadOnlyList<GrowthLog.Web.Data.Charts.ChartSeries> Series { get; set; } = new List<GrowthLog.Web.Data.Charts.ChartSeries>();
     [Parameter] public string XAxisMode { get; set; } = GrowthLog.Web.Data.Charts.ChartXAxisModes.Age;
     [Parameter] public string YUnit { get; set; } = "cm";
+    /// <summary>When set, this person's series is emphasized and others are muted.</summary>
+    [Parameter] public string? HighlightedPersonId { get; set; }
+    [Parameter] public EventCallback<string> OnLegendClick { get; set; }
 
     private const double Width = 800;
     private const double Height = 420;

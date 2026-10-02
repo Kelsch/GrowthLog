@@ -17,6 +17,19 @@
 }
 else
 {
+    <div class="compare-mode-toggle mb-3">
+        <button type="button"
+                class="filter-chip @(_mode == CompareModes.SameAge ? "active" : "")"
+                @onclick='() => SetMode(CompareModes.SameAge)'>
+            Same age
+        </button>
+        <button type="button"
+                class="filter-chip @(_mode == CompareModes.Trajectories ? "active" : "")"
+                @onclick='() => SetMode(CompareModes.Trajectories)'>
+            Growth trajectories
+        </button>
+    </div>
+
     <div class="row g-3 mb-3">
         <div class="col-md-3">
             <label class="form-label">Metric</label>
@@ -27,15 +40,18 @@ else
                 }
             </select>
         </div>
-        <div class="col-md-3">
-            <label class="form-label">X axis</label>
-            <select class="form-select" value="@_xAxis" @onchange="OnXAxisChanged">
-                @foreach (var x in ChartXAxisModes.All)
-                {
-                    <option value="@x">@x</option>
-                }
-            </select>
-        </div>
+        @if (_mode == CompareModes.Trajectories)
+        {
+            <div class="col-md-3">
+                <label class="form-label">X axis</label>
+                <select class="form-select" value="@_xAxis" @onchange="OnXAxisChanged">
+                    @foreach (var x in ChartXAxisModes.All)
+                    {
+                        <option value="@x">@x</option>
+                    }
+                </select>
+            </div>
+        }
     </div>
 
     <h2>Families</h2>
@@ -64,13 +80,91 @@ else
         }
     </div>
 
-    <h2>@_metric over @(_xAxis == ChartXAxisModes.Age ? "age" : "date")</h2>
-    <LineChart Series="_series" XAxisMode="_xAxis" YUnit="@(_metric == ChartMetrics.Weight ? "kg" : "cm")" />
+    @if (_mode == CompareModes.SameAge)
+    {
+        <h2>@_metric at age @_selectedAge.ToString("0.#")</h2>
 
-    <h2 class="mt-4">Comparison table</h2>
+        <div class="same-age-controls mb-3">
+            <label class="form-label" for="age-slider">Age (years)</label>
+            <div class="same-age-controls-row">
+                <input id="age-slider" type="range"
+                       min="@MinAge" max="@MaxAge" step="0.5"
+                       value="@_selectedAge"
+                       @oninput="OnAgeSliderChanged" />
+                <input type="number" class="form-control same-age-number"
+                       min="@MinAge" max="@MaxAge" step="0.5"
+                       value="@_selectedAge"
+                       @oninput="OnAgeNumberChanged" />
+            </div>
+            <p class="text-muted">Showing the nearest actual measurement within ±6 months of the selected age. Missing values are not interpolated.</p>
+        </div>
+
+        @if (_sameAgeRows.Count == 0)
+        {
+            <p>There isn't enough measurement data for this comparison yet.</p>
+        }
+        else
+        {
+            <div class="same-age-plot">
+                @foreach (var row in _sameAgeRows)
+                {
+                    <div class="same-age-row">
+                        <div class="same-age-name">@row.PersonName</div>
+                        <div class="same-age-bar-track">
+                            @if (row.Value is null)
+                            {
+                                <span class="same-age-missing">No measurement near age @_selectedAge.ToString("0.#")</span>
+                            }
+                            else
+                            {
+                                <div class="same-age-bar"
+                                     style="width:@(BarWidthPercent(row.Value.Value))%;background:@ColorFor(row.PersonId)">
+                                </div>
+                            }
+                        </div>
+                        <div class="same-age-value">
+                            @(row.Value is null ? "—" : FormatValue(row.Value.Value))
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+    else
+    {
+        <h2>@_metric over @(_xAxis == ChartXAxisModes.Age ? "age" : "date")</h2>
+        <LineChart Series="_series"
+                   XAxisMode="_xAxis"
+                   YUnit="@(_metric == ChartMetrics.Weight ? "kg" : "cm")"
+                   HighlightedPersonId="_highlightedPersonId"
+                   OnLegendClick="OnLegendClick" />
+    }
+
+    <h2 class="mt-4">Comparison details</h2>
     @if (_series.Count == 0)
     {
         <p>No data to compare.</p>
+    }
+    else if (_mode == CompareModes.SameAge)
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Person</th>
+                    <th>@_metric</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _sameAgeRows)
+                {
+                    <tr>
+                        <td>@row.PersonName</td>
+                        <td>@(row.Value is null ? "—" : FormatValue(row.Value.Value))</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p class="text-muted">Values show the nearest actual measurement within ±6 months of age @_selectedAge.ToString("0.#"). Missing values are not interpolated.</p>
     }
     else
     {
@@ -103,10 +197,21 @@ else
 }
 
 @code {
+    private static class CompareModes
+    {
+        public const string SameAge = "SameAge";
+        public const string Trajectories = "Trajectories";
+    }
+
+    private const double AgeToleranceYears = 0.5; // ±6 months
+
     private bool _loading = true;
+    private string _mode = CompareModes.SameAge;
     private string _metric = ChartMetrics.Height;
     private string _xAxis = ChartXAxisModes.Age;
     private string? _userId;
+    private double _selectedAge = 10;
+    private string? _highlightedPersonId;
 
     private List<Family> _families = new();
     private List<Person> _people = new();
@@ -166,10 +271,37 @@ else
         _loading = false;
     }
 
+    private void SetMode(string mode)
+    {
+        _mode = mode;
+        _highlightedPersonId = null;
+    }
+
     private async Task OnMetricChanged(ChangeEventArgs e)
     {
         _metric = e.Value?.ToString() ?? ChartMetrics.Height;
         await LoadAsync();
+    }
+
+    private void OnAgeSliderChanged(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var v))
+        {
+            _selectedAge = Math.Clamp(v, MinAge, MaxAge);
+        }
+    }
+
+    private void OnAgeNumberChanged(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var v))
+        {
+            _selectedAge = Math.Clamp(v, MinAge, MaxAge);
+        }
+    }
+
+    private void OnLegendClick(string personId)
+    {
+        _highlightedPersonId = _highlightedPersonId == personId ? null : personId;
     }
 
     private async Task OnXAxisChanged(ChangeEventArgs e)
@@ -250,4 +382,68 @@ else
 
     private string FormatValue(double v)
         => _metric == ChartMetrics.Weight ? $"{v:0.#} kg" : $"{v:0.#} cm";
+
+    private double MinAge => 0;
+
+    private double MaxAge
+    {
+        get
+        {
+            var max = _series.SelectMany(s => s.Points).Select(p => p.AgeYears).DefaultIfEmpty(18).Max();
+            return Math.Max(1, Math.Ceiling(max));
+        }
+    }
+
+    private sealed class SameAgeRow
+    {
+        public string PersonId { get; set; } = string.Empty;
+        public string PersonName { get; set; } = string.Empty;
+        public double? Value { get; set; }
+    }
+
+    private List<SameAgeRow> _sameAgeRows
+    {
+        get
+        {
+            var rows = new List<SameAgeRow>();
+            foreach (var s in _series)
+            {
+                var nearest = s.Points
+                    .Where(p => Math.Abs(p.AgeYears - _selectedAge) <= AgeToleranceYears)
+                    .OrderBy(p => Math.Abs(p.AgeYears - _selectedAge))
+                    .FirstOrDefault();
+
+                rows.Add(new SameAgeRow
+                {
+                    PersonId = s.PersonId,
+                    PersonName = s.PersonName,
+                    Value = nearest?.Y
+                });
+            }
+            return rows.OrderByDescending(r => r.Value ?? double.MinValue).ToList();
+        }
+    }
+
+    private double _sameAgeMaxValue
+        => _sameAgeRows.Where(r => r.Value is not null).Select(r => r.Value!.Value).DefaultIfEmpty(1).Max();
+
+    private double BarWidthPercent(double value)
+    {
+        var max = _sameAgeMaxValue;
+        if (max <= 0) return 0;
+        return Math.Max(2, value / max * 100);
+    }
+
+    private static readonly string[] Palette =
+    {
+        "#2563eb", "#dc2626", "#16a34a", "#d97706", "#7c3aed",
+        "#0891b2", "#db2777", "#65a30d", "#ea580c", "#4f46e5"
+    };
+
+    private static string ColorFor(string personId)
+    {
+        var hash = 0;
+        foreach (var c in personId) hash = (hash * 31 + c) & 0x7fffffff;
+        return Palette[hash % Palette.Length];
+    }
 }
