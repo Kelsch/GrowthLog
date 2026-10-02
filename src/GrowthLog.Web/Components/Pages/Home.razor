@@ -59,7 +59,9 @@ else
     <p class="text-muted">Keep track of birthdays and yearly growth measurements.</p>
     @if (_visibleUpcoming.Count == 0)
     {
-        <p>Everyone is caught up. Your next birthday measurement will appear here automatically.</p>
+        <EmptyState Icon="🎉"
+                    Title="Everyone is caught up."
+                    Description="Your next birthday measurement will appear here automatically." />
     }
     else
     {
@@ -90,7 +92,11 @@ else
     </div>
     @if (_recent.Count == 0)
     {
-        <p>No measurements recorded yet.</p>
+        <EmptyState Icon="📏"
+                    Title="No measurements yet."
+                    Description="Add the first height or weight measurement to start a growth history."
+                    ActionText="+ Add measurement"
+                    OnAction="OpenAddFromDashboard" />
     }
     else if (!_showAllRecent)
     {
@@ -134,7 +140,11 @@ else
     <h2>My families</h2>
     @if (_ownFamilies.Count == 0)
     {
-        <p>You are not a member of any family yet. <a href="families">Create one</a>.</p>
+        <EmptyState Icon="👪"
+                    Title="You are not a member of any family yet."
+                    Description="Create a family to start tracking growth together."
+                    ActionText="Create a family"
+                    ActionHref="families" />
     }
     else
     {

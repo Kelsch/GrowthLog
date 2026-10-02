@@ -4,7 +4,8 @@
 @if (IsOpen && Person is not null)
 {
     <div class="modal-backdrop" @onclick="Close"></div>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="measurement-dialog-title">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="measurement-dialog-title"
+         @onkeydown="OnKeyDown" tabindex="-1">
         <div class="modal-header">
             <h3 id="measurement-dialog-title">@(Existing is null ? "Add measurement" : "Edit measurement")</h3>
             <button type="button" class="btn-link" aria-label="Close" @onclick="Close">✕</button>
@@ -113,6 +114,14 @@
     private async Task Close()
     {
         await OnClose.InvokeAsync();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await Close();
+        }
     }
 
     private async Task Save()

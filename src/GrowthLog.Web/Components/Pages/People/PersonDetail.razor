@@ -104,7 +104,11 @@ else
     <h2>Growth</h2>
     @if (_heightSeries.Count == 0 && _weightSeries.Count == 0)
     {
-        <p class="text-muted">No measurements to chart yet.</p>
+        <EmptyState Icon="📈"
+                    Title="No measurements to chart yet."
+                    Description="Add the first height or weight measurement to start a growth history."
+                    ActionText="+ Add measurement"
+                    OnAction="OpenAddDialog" />
     }
     else
     {
@@ -221,7 +225,11 @@ else
 
     @if (_measurements.Count == 0)
     {
-        <p>No measurements recorded yet.</p>
+        <EmptyState Icon="📏"
+                    Title="No measurements recorded yet."
+                    Description="Add the first height or weight measurement to start a growth history."
+                    ActionText="+ Add measurement"
+                    OnAction="OpenAddDialog" />
     }
     else
     {

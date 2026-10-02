@@ -101,7 +101,9 @@ else
 
         @if (_sameAgeRows.Count == 0)
         {
-            <p>There isn't enough measurement data for this comparison yet.</p>
+            <EmptyState Icon="📊"
+                        Title="There isn't enough measurement data for this comparison yet."
+                        Description="Select people with recorded measurements, or add a measurement first." />
         }
         else
         {
@@ -167,7 +169,9 @@ else
     {
         if (_series.Count == 0)
         {
-            <p>No data to compare.</p>
+            <EmptyState Icon="📊"
+                        Title="No data to compare."
+                        Description="Select at least one person with recorded measurements." />
         }
         else if (_mode == CompareModes.SameAge)
         {

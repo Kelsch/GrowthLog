@@ -1,0 +1,14 @@
+@* Lightweight skeleton placeholder for a section that is still loading.
+   Keeps the rest of the page usable instead of blanking everything. *@
+
+<div class="loading-block" role="status" aria-live="polite">
+    <span class="visually-hidden">Loading…</span>
+    @for (var i = 0; i < Rows; i++)
+    {
+        <div class="loading-row" aria-hidden="true"></div>
+    }
+</div>
+
+@code {
+    [Parameter] public int Rows { get; set; } = 3;
+}

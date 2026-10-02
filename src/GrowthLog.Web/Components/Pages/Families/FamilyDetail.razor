@@ -60,7 +60,9 @@ else
     <p class="text-muted">Keep track of birthdays and yearly growth measurements.</p>
     @if (_upcoming.Count == 0)
     {
-        <p>Everyone is caught up. Your next birthday measurement will appear here automatically.</p>
+        <EmptyState Icon="🎉"
+                    Title="Everyone is caught up."
+                    Description="Your next birthday measurement will appear here automatically." />
     }
     else
     {
@@ -111,7 +113,15 @@ else
         </div>
     </div>
 
-    @if (_filteredPeople.Count == 0)
+    @if (_people.Count == 0)
+    {
+        <EmptyState Icon="👶"
+                    Title="This family doesn't have any people yet."
+                    Description="Add yourself, a child, or another family member to get started."
+                    ActionText="+ Add a person"
+                    OnAction="ToggleAddPanel" />
+    }
+    else if (_filteredPeople.Count == 0)
     {
         <p class="text-muted">No people match this filter.</p>
     }

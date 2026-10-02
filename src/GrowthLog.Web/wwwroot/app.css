@@ -739,6 +739,325 @@ main {
     border-radius: 2px;
 }
 
+/* GrowthLog empty states */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.35rem;
+    padding: 1.75rem 1rem;
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+}
+
+.empty-state-icon {
+    font-size: 1.75rem;
+    line-height: 1;
+}
+
+.empty-state-title {
+    font-weight: 600;
+    margin: 0;
+}
+
+.empty-state-description {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0 0 0.5rem 0;
+    max-width: 32rem;
+}
+
+/* GrowthLog loading skeletons */
+.loading-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.loading-row {
+    height: 3.25rem;
+    border-radius: var(--radius);
+    background: linear-gradient(90deg, #eef2f7 25%, #f8fafc 37%, #eef2f7 63%);
+    background-size: 400% 100%;
+    animation: loading-shimmer 1.4s ease infinite;
+}
+
+@keyframes loading-shimmer {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .loading-row {
+        animation: none;
+    }
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* GrowthLog section headers */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 2rem;
+    margin-bottom: 0.75rem;
+}
+
+.section-header h2 {
+    margin: 0;
+}
+
+/* GrowthLog metric cards */
+.metric-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.85rem 1rem;
+    box-shadow: var(--shadow);
+}
+
+.metric-card-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+}
+
+.metric-card-value {
+    font-size: 1.35rem;
+    font-weight: 600;
+    margin-top: 0.15rem;
+}
+
+/* GrowthLog dashboard */
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.dashboard-header h1 {
+    margin-bottom: 0.25rem;
+}
+
+.dashboard-header-actions {
+    flex-shrink: 0;
+}
+
+.summary-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.85rem 1rem;
+    box-shadow: var(--shadow);
+}
+
+.summary-card-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.summary-card-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+}
+
+.activity-feed {
+    list-style: none;
+    margin: 0 0 1rem 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.activity-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 0.9rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.activity-main {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.activity-values {
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.activity-when {
+    color: var(--muted);
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+/* GrowthLog person header */
+.person-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.person-header-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #e0e7ff;
+    color: #3730a3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.person-header-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.person-header-main h1 {
+    margin-bottom: 0.15rem;
+}
+
+.person-header-meta {
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+
+.person-header-meta .dot {
+    margin: 0 0.35rem;
+}
+
+.person-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+/* GrowthLog chart toolbar */
+.chart-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.chart-metric-toggle,
+.chart-range-toggle {
+    display: flex;
+    gap: 0.35rem;
+}
+
+/* GrowthLog compare */
+.compare-mode-toggle {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.same-age-controls-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.same-age-controls-row input[type="range"] {
+    flex: 1;
+}
+
+.same-age-number {
+    max-width: 6rem;
+}
+
+/* GrowthLog legend buttons */
+.legend-item {
+    background: none;
+    border: none;
+    padding: 0.15rem 0.35rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+}
+
+.legend-item:hover {
+    background: #f1f5f9;
+}
+
+.legend-item-active {
+    font-weight: 600;
+    background: #eff6ff;
+}
+
+.legend-item-muted {
+    opacity: 0.55;
+}
+
+/* GrowthLog focus visibility */
+.btn:focus-visible,
+.btn-link:focus-visible,
+.filter-chip:focus-visible,
+.legend-item:focus-visible,
+.form-control:focus-visible,
+.form-select:focus-visible,
+.nav-link:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* GrowthLog nav toggle (mobile) */
+.nav-toggle {
+    display: none;
+}
+
 /* Error UI */
 
 #blazor-error-ui {
@@ -768,15 +1087,100 @@ main {
 
     .sidebar {
         width: 100%;
+        display: none;
+    }
+
+    .sidebar.sidebar-open {
+        display: flex;
     }
 
     .sidebar nav {
-        flex-direction: row;
-        flex-wrap: wrap;
+        flex-direction: column;
         padding: 0 0.5rem 0.75rem;
+    }
+
+    .nav-toggle {
+        display: inline-block;
+        margin-right: auto;
     }
 
     .col-md-1, .col-md-2, .col-md-3, .col-md-5 {
         flex: 1 1 100%;
+    }
+
+    .metric-cards,
+    .summary-strip {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-header,
+    .person-header,
+    .family-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .dashboard-header-actions,
+    .person-header-actions,
+    .family-header-actions {
+        width: 100%;
+    }
+
+    .dashboard-header-actions .btn,
+    .person-header-actions .btn,
+    .family-header-actions .btn {
+        flex: 1;
+    }
+
+    .chart-toolbar,
+    .people-toolbar,
+    .section-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .same-age-row {
+        grid-template-columns: 1.5rem 1fr 4.5rem;
+    }
+
+    .same-age-bar-track {
+        grid-column: 1 / -1;
+        order: 3;
+    }
+
+    .same-age-controls-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .same-age-number {
+        max-width: none;
+    }
+
+    .activity-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+}
+
+/* Touch targets: keep primary actions comfortably tappable. */
+.btn,
+.filter-chip,
+.legend-item,
+.nav-link {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.btn-sm {
+    min-height: 36px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.001ms !important;
+        transition-duration: 0.001ms !important;
     }
 }

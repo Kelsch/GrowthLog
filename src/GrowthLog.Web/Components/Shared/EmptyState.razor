@@ -1,0 +1,28 @@
+@* Friendly empty state with an optional primary action.
+   Use instead of empty tables or blank sections. *@
+
+<div class="empty-state">
+    <div class="empty-state-icon" aria-hidden="true">@Icon</div>
+    <p class="empty-state-title">@Title</p>
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <p class="empty-state-description">@Description</p>
+    }
+    @if (!string.IsNullOrWhiteSpace(ActionText) && !string.IsNullOrWhiteSpace(ActionHref))
+    {
+        <a class="btn btn-primary" href="@ActionHref">@ActionText</a>
+    }
+    else if (!string.IsNullOrWhiteSpace(ActionText) && OnAction.HasDelegate)
+    {
+        <button type="button" class="btn btn-primary" @onclick="() => OnAction.InvokeAsync()">@ActionText</button>
+    }
+</div>
+
+@code {
+    [Parameter] public string Icon { get; set; } = "🌱";
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string? ActionText { get; set; }
+    [Parameter] public string? ActionHref { get; set; }
+    [Parameter] public EventCallback OnAction { get; set; }
+}
