@@ -18,69 +18,85 @@
 }
 else
 {
-    <div class="compare-mode-toggle mb-3">
-        <button type="button"
-                class="filter-chip @(_mode == CompareModes.SameAge ? "active" : "")"
-                @onclick='() => SetMode(CompareModes.SameAge)'>
-            Same age
-        </button>
-        <button type="button"
-                class="filter-chip @(_mode == CompareModes.Trajectories ? "active" : "")"
-                @onclick='() => SetMode(CompareModes.Trajectories)'>
-            Growth trajectories
-        </button>
-    </div>
+    <div class="compare-toolbar">
+        <div class="compare-mode-toggle">
+            <button type="button"
+                    class="filter-chip @(_mode == CompareModes.SameAge ? "active" : "")"
+                    @onclick='() => SetMode(CompareModes.SameAge)'>
+                Same age
+            </button>
+            <button type="button"
+                    class="filter-chip @(_mode == CompareModes.Trajectories ? "active" : "")"
+                    @onclick='() => SetMode(CompareModes.Trajectories)'>
+                Growth trajectories
+            </button>
+        </div>
 
-    <div class="row g-3 mb-3">
-        <div class="col-md-3">
-            <label class="form-label">Metric</label>
-            <select class="form-select" value="@_metric" @onchange="OnMetricChanged">
+        <div class="compare-toolbar-controls">
+            <label class="compare-inline-label" for="compare-metric">Metric</label>
+            <select id="compare-metric" class="form-select form-select-sm compare-inline-select"
+                    value="@_metric" @onchange="OnMetricChanged">
                 @foreach (var m in ChartMetrics.All)
                 {
                     <option value="@m">@m</option>
                 }
             </select>
-        </div>
-        @if (_mode == CompareModes.Trajectories)
-        {
-            <div class="col-md-3">
-                <label class="form-label">X axis</label>
-                <select class="form-select" value="@_xAxis" @onchange="OnXAxisChanged">
+
+            @if (_mode == CompareModes.Trajectories)
+            {
+                <label class="compare-inline-label" for="compare-xaxis">X axis</label>
+                <select id="compare-xaxis" class="form-select form-select-sm compare-inline-select"
+                        value="@_xAxis" @onchange="OnXAxisChanged">
                     @foreach (var x in ChartXAxisModes.All)
                     {
                         <option value="@x">@x</option>
                     }
                 </select>
+            }
+        </div>
+    </div>
+
+    <div class="compare-filters">
+        <button type="button" class="compare-filters-toggle"
+                aria-expanded="@_filtersOpen"
+                @onclick="() => _filtersOpen = !_filtersOpen">
+            <span>@(_filtersOpen ? "▾" : "▸") Filters</span>
+            <span class="compare-filters-summary">@FiltersSummary</span>
+        </button>
+
+        @if (_filtersOpen)
+        {
+            <div class="compare-filters-body">
+                <div class="compare-filter-group">
+                    <div class="compare-filter-heading">Families</div>
+                    @foreach (var f in _families)
+                    {
+                        <label class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input"
+                                   checked="@_selectedFamilyIds.Contains(f.Id)"
+                                   @onchange="e => ToggleFamily(f.Id, (bool)e.Value!)" />
+                            <span class="form-check-label">@f.Name</span>
+                        </label>
+                    }
+                </div>
+
+                <div class="compare-filter-group">
+                    <div class="compare-filter-heading">People</div>
+                    @foreach (var p in _people)
+                    {
+                        <label class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input"
+                                   checked="@_selectedPersonIds.Contains(p.Id)"
+                                   @onchange="e => TogglePerson(p.Id, (bool)e.Value!)" />
+                            <span class="form-check-label">@p.FullName</span>
+                        </label>
+                    }
+                </div>
             </div>
         }
     </div>
 
-    <h2>Families</h2>
-    <div class="mb-3">
-        @foreach (var f in _families)
-        {
-            <label class="form-check form-check-inline">
-                <input type="checkbox" class="form-check-input"
-                       checked="@_selectedFamilyIds.Contains(f.Id)"
-                       @onchange="e => ToggleFamily(f.Id, (bool)e.Value!)" />
-                <span class="form-check-label">@f.Name</span>
-            </label>
-        }
-    </div>
-
-    <h2>People</h2>
-    <div class="mb-3">
-        @foreach (var p in _people)
-        {
-            <label class="form-check form-check-inline">
-                <input type="checkbox" class="form-check-input"
-                       checked="@_selectedPersonIds.Contains(p.Id)"
-                       @onchange="e => TogglePerson(p.Id, (bool)e.Value!)" />
-                <span class="form-check-label">@p.FullName</span>
-            </label>
-        }
-    </div>
-
+    <div class="compare-chart-area">
     @if (_mode == CompareModes.SameAge)
     {
         <h2>@_metric at age @_selectedAge.ToString("0.#")</h2>
@@ -168,6 +184,7 @@ else
                    HighlightedPersonId="_highlightedPersonId"
                    OnLegendClick="OnLegendClick" />
     }
+    </div>
 
     <div class="section-header mt-4">
         <h2>Comparison details</h2>
@@ -254,6 +271,7 @@ else
     private double _selectedAge = 10;
     private string? _highlightedPersonId;
     private bool _showDetails;
+    private bool _filtersOpen;
 
     private List<Family> _families = new();
     private List<Person> _people = new();
@@ -432,6 +450,19 @@ else
             ? UnitConverter.FormatWeight(v, _unitSystem)
             : UnitConverter.FormatHeight(v, _unitSystem);
 
+    private string FiltersSummary
+    {
+        get
+        {
+            var people = _selectedPersonIds.Count;
+            var metric = _metric;
+            var axis = _mode == CompareModes.Trajectories
+                ? (_xAxis == ChartXAxisModes.Age ? "Age" : "Date")
+                : $"Age {_selectedAge:0.#}";
+            return $"{people} {(people == 1 ? "person" : "people")} · {metric} · {axis}";
+        }
+    }
+
     private double MinAge => 0;
 
     private double MaxAge
@@ -506,6 +537,80 @@ else
 }
 
 <style>
+    .compare-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.75rem;
+    }
+
+    .compare-toolbar-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .compare-inline-label {
+        font-size: 0.85rem;
+        color: var(--muted);
+        margin: 0;
+    }
+
+    .compare-inline-select {
+        width: auto;
+        min-width: 7rem;
+    }
+
+    .compare-filters {
+        margin-bottom: 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+    }
+
+    .compare-filters-toggle {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        width: 100%;
+        padding: 0.6rem 0.9rem;
+        background: none;
+        border: none;
+        font: inherit;
+        font-weight: 600;
+        color: var(--text);
+        cursor: pointer;
+        text-align: left;
+    }
+
+    .compare-filters-summary {
+        font-weight: 400;
+        font-size: 0.85rem;
+        color: var(--muted);
+    }
+
+    .compare-filters-body {
+        padding: 0 0.9rem 0.9rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .compare-filter-heading {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        margin-bottom: 0.25rem;
+    }
+
+    .compare-chart-area {
+        margin-bottom: 1rem;
+    }
+
     .same-age-plot {
         display: flex;
         flex-direction: column;

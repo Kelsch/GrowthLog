@@ -34,6 +34,9 @@
                 @((MarkupString)$"<text x=\"{Fmt(x)}\" y=\"{Fmt(Height - PadBottom + 16)}\" text-anchor=\"middle\" font-size=\"11\" fill=\"#666\">{FormatX(tick)}</text>")
             }
 
+            @* X axis title *@
+            @((MarkupString)$"<text x=\"{Fmt(PadLeft + (Width - PadLeft - PadRight) / 2)}\" y=\"{Fmt(Height - 8)}\" text-anchor=\"middle\" font-size=\"11\" font-weight=\"600\" fill=\"#666\">{XAxisLabel}</text>")
+
             @* Series *@
             @foreach (var s in Series)
             {
@@ -86,11 +89,11 @@
     [Parameter] public EventCallback<string> OnLegendClick { get; set; }
 
     private const double Width = 800;
-    private const double Height = 420;
-    private const double PadLeft = 56;
+    private const double Height = 460;
+    private const double PadLeft = 64;
     private const double PadRight = 16;
-    private const double PadTop = 16;
-    private const double PadBottom = 40;
+    private const double PadTop = 28;
+    private const double PadBottom = 52;
 
     private double _minX, _maxX, _minY, _maxY;
 
@@ -172,6 +175,11 @@
         => YUnit == "kg"
             ? (UnitSystem == "Metric" ? "Weight (kg)" : "Weight (lb)")
             : (UnitSystem == "Metric" ? "Height (cm)" : "Height (in)");
+
+    private string XAxisLabel
+        => XAxisMode == GrowthLog.Web.Data.Charts.ChartXAxisModes.Age
+            ? "Age (years)"
+            : "Date";
 
     private string FormatX(double v)
         => XAxisMode == GrowthLog.Web.Data.Charts.ChartXAxisModes.Age

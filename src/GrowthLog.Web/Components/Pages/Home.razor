@@ -5,6 +5,7 @@
 @inject FamilyRepository Families
 @inject PersonRepository People
 @inject MeasurementRepository Measurements
+@inject GrowthLog.Web.Data.Charts.ChartDataService Charts
 @inject AuthenticationStateProvider AuthState
 @inject UserManager<ApplicationUser> UserManager
 
@@ -167,9 +168,23 @@ else
         </ul>
     }
 
-    <p class="mt-4">
-        <a class="btn btn-outline-primary" href="compare">Compare growth</a>
-    </p>
+    <div class="section-header">
+        <h2>Family growth</h2>
+        <a class="btn btn-sm btn-outline-secondary" href="compare">Open full compare</a>
+    </div>
+    @if (_snapshotSeries.Count == 0)
+    {
+        <EmptyState Icon="📈"
+                    Title="No growth data to show yet."
+                    Description="Add a measurement to see your family's growth over time." />
+    }
+    else
+    {
+        <LineChart Series="_snapshotSeries"
+                   XAxisMode="Age"
+                   YUnit="cm"
+                   UnitSystem="_unitSystem" />
+    }
 
     <MeasurementDialog IsOpen="_dialogOpen"
                        Person="_dialogPerson"
@@ -194,8 +209,10 @@ else
 
     private bool _showAllUpcoming;
     private bool _showAllRecent;
+    private IReadOnlyList<GrowthLog.Web.Data.Charts.ChartSeries> _snapshotSeries = new List<GrowthLog.Web.Data.Charts.ChartSeries>();
 
     private const int UpcomingWindowDays = 90;
+    private const int SnapshotMaxPeople = 5;
 
     private string Greeting
     {
@@ -371,6 +388,18 @@ else
             .ThenBy(u => u.DaysUntilDue)
             .ThenBy(u => u.PersonName)
             .ToList();
+
+        // Read-only growth snapshot: a small default set (first few visible
+        // people) so the dashboard card stays uncluttered. Authorization is
+        // enforced inside ChartDataService.
+        var snapshotIds = peopleById.Values
+            .Select(p => p.Id)
+            .Take(SnapshotMaxPeople)
+            .ToHashSet(StringComparer.Ordinal);
+
+        _snapshotSeries = snapshotIds.Count == 0
+            ? new List<GrowthLog.Web.Data.Charts.ChartSeries>()
+            : await Charts.GetSeriesAsync(_userId, GrowthLog.Web.Data.Charts.ChartMetrics.Height, snapshotIds);
     }
 
     private void OpenAddFromDashboard()
