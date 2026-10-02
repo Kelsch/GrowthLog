@@ -48,39 +48,64 @@ else
         </div>
     </div>
 
-    <div class="section-header">
-        <h2>Upcoming measurements</h2>
-        @if (_hasLongTailUpcoming)
-        {
-            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _showAllUpcoming = !_showAllUpcoming">
-                @(_showAllUpcoming ? "Show fewer" : "Show all upcoming")
-            </button>
-        }
-    </div>
-    <p class="text-muted">Keep track of birthdays and yearly growth measurements.</p>
-    @if (_visibleUpcoming.Count == 0)
-    {
-        <EmptyState Icon="🎉"
-                    Title="Everyone is caught up."
-                    Description="Your next birthday measurement will appear here automatically." />
-    }
-    else
-    {
-        <div class="upcoming-list">
-            @foreach (var u in _visibleUpcoming)
+    <div class="dashboard-two-col">
+        <div class="dashboard-col-upcoming">
+            <div class="section-header">
+                <h2>Upcoming measurements</h2>
+                @if (_hasLongTailUpcoming)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _showAllUpcoming = !_showAllUpcoming">
+                        @(_showAllUpcoming ? "Show fewer" : "Show all upcoming")
+                    </button>
+                }
+            </div>
+            <p class="text-muted">Keep track of birthdays and yearly growth measurements.</p>
+            @if (_visibleUpcoming.Count == 0)
             {
-                <UpcomingMeasurementCard
-                    PersonId="@u.PersonId"
-                    PersonName="@u.PersonName"
-                    AgeYears="@u.AgeYears"
-                    Birthday="@u.Birthday"
-                    Status="@u.Status"
-                    StatusText="@u.StatusText"
-                    LastMeasurementDate="@u.LastMeasurementDate"
-                    OnAddMeasurement="() => OpenDialog(u.PersonId)" />
+                <EmptyState Icon="🎉"
+                            Title="Everyone is caught up."
+                            Description="Your next birthday measurement will appear here automatically." />
+            }
+            else
+            {
+                <div class="upcoming-list">
+                    @foreach (var u in _visibleUpcoming)
+                    {
+                        <UpcomingMeasurementCard
+                            PersonId="@u.PersonId"
+                            PersonName="@u.PersonName"
+                            AgeYears="@u.AgeYears"
+                            Birthday="@u.Birthday"
+                            Status="@u.Status"
+                            StatusText="@u.StatusText"
+                            LastMeasurementDate="@u.LastMeasurementDate"
+                            OnAddMeasurement="() => OpenDialog(u.PersonId)" />
+                    }
+                </div>
             }
         </div>
-    }
+
+        <div class="dashboard-col-growth">
+            <div class="section-header">
+                <h2>Family growth</h2>
+                <a class="btn btn-sm btn-outline-secondary" href="compare">Open full compare</a>
+            </div>
+            @if (_snapshotSeries.Count == 0)
+            {
+                <EmptyState Icon="📈"
+                            Title="No growth data to show yet."
+                            Description="Add a measurement to see your family's growth over time." />
+            }
+            else
+            {
+                <LineChart Series="_snapshotSeries"
+                           XAxisMode="Age"
+                           YUnit="cm"
+                           UnitSystem="_unitSystem"
+                           Class="chart-card" />
+            }
+        </div>
+    </div>
 
     <div class="section-header">
         <h2>Recent activity</h2>
@@ -102,7 +127,7 @@ else
     else if (!_showAllRecent)
     {
         <ul class="activity-feed">
-            @foreach (var r in _recent.Take(8))
+            @foreach (var r in _recent.Take(5))
             {
                 <li class="activity-item">
                     <div class="activity-main">
@@ -166,24 +191,6 @@ else
                 <li>@f</li>
             }
         </ul>
-    }
-
-    <div class="section-header">
-        <h2>Family growth</h2>
-        <a class="btn btn-sm btn-outline-secondary" href="compare">Open full compare</a>
-    </div>
-    @if (_snapshotSeries.Count == 0)
-    {
-        <EmptyState Icon="📈"
-                    Title="No growth data to show yet."
-                    Description="Add a measurement to see your family's growth over time." />
-    }
-    else
-    {
-        <LineChart Series="_snapshotSeries"
-                   XAxisMode="Age"
-                   YUnit="cm"
-                   UnitSystem="_unitSystem" />
     }
 
     <MeasurementDialog IsOpen="_dialogOpen"

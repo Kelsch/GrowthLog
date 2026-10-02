@@ -869,6 +869,31 @@ main {
     margin-top: 0.15rem;
 }
 
+/* GrowthLog dashboard two-column block */
+.dashboard-two-col {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    gap: 1.25rem;
+    align-items: start;
+    margin-top: 0.5rem;
+}
+
+.dashboard-col-upcoming,
+.dashboard-col-growth {
+    min-width: 0;
+}
+
+.dashboard-col-upcoming .section-header,
+.dashboard-col-growth .section-header {
+    margin-top: 0;
+}
+
+@media (max-width: 992px) {
+    .dashboard-two-col {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* GrowthLog dashboard */
 .dashboard-header {
     display: flex;
