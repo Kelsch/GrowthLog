@@ -36,7 +36,7 @@ else
         <div class="family-header-actions">
             @if (_canAdminister)
             {
-                <button class="btn btn-sm btn-outline-secondary" @onclick="(() => _renaming = !_renaming)">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => _renaming = !_renaming">
                     Rename
                 </button>
             }
@@ -51,7 +51,7 @@ else
                 <InputText @bind-Value="_rename.Name" class="form-control" />
                 <AntiforgeryToken />
                 <button type="submit" class="btn btn-primary">Save</button>
-                <button type="button" class="btn btn-outline-secondary" @onclick="(() => _renaming = false)">Cancel</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="() => _renaming = false">Cancel</button>
             </div>
         </EditForm>
     }
@@ -100,9 +100,9 @@ else
 
     <div class="people-toolbar">
         <div class="people-filters">
-            <button class="filter-chip @(_filter == "all" ? "active" : "")" @onclick="() => SetFilter("all")">All</button>
-            <button class="filter-chip @(_filter == "adults" ? "active" : "")" @onclick="() => SetFilter("adults")">Adults</button>
-            <button class="filter-chip @(_filter == "children" ? "active" : "")" @onclick="() => SetFilter("children")">Children</button>
+            <button class="filter-chip @(_filter == "all" ? "active" : "")" @onclick='() => SetFilter("all")'>All</button>
+            <button class="filter-chip @(_filter == "adults" ? "active" : "")" @onclick='() => SetFilter("adults")'>Adults</button>
+            <button class="filter-chip @(_filter == "children" ? "active" : "")" @onclick='() => SetFilter("children")'>Children</button>
         </div>
         <div class="people-search">
             <input class="form-control" placeholder="Search people…"
