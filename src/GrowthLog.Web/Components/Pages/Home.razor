@@ -10,26 +10,61 @@
 
 <PageTitle>Dashboard — GrowthLog</PageTitle>
 
-<h1>Dashboard</h1>
-
 @if (_loading)
 {
     <p>Loading…</p>
 }
 else
 {
-    <p class="text-muted">See how your family grows.</p>
+    <div class="dashboard-header">
+        <div>
+            <h1>@Greeting, @_displayName!</h1>
+            <p class="text-muted">Track, compare, and celebrate your family's growth.</p>
+        </div>
+        <div class="dashboard-header-actions">
+            <button type="button" class="btn btn-primary" @onclick="OpenAddFromDashboard">
+                + Add measurement
+            </button>
+        </div>
+    </div>
 
-    <h2>Upcoming measurements</h2>
+    <div class="summary-strip">
+        <div class="summary-card">
+            <div class="summary-card-value">@_ownFamilies.Count</div>
+            <div class="summary-card-label">Famil@(_ownFamilies.Count == 1 ? "y" : "ies")</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-card-value">@_peopleCount</div>
+            <div class="summary-card-label">People</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-card-value">@_measurementCount</div>
+            <div class="summary-card-label">Measurements</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-card-value">@_yearsTrackingText</div>
+            <div class="summary-card-label">Years tracking</div>
+        </div>
+    </div>
+
+    <div class="section-header">
+        <h2>Upcoming measurements</h2>
+        @if (_hasLongTailUpcoming)
+        {
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _showAllUpcoming = !_showAllUpcoming">
+                @(_showAllUpcoming ? "Show fewer" : "Show all upcoming")
+            </button>
+        }
+    </div>
     <p class="text-muted">Keep track of birthdays and yearly growth measurements.</p>
-    @if (_upcoming.Count == 0)
+    @if (_visibleUpcoming.Count == 0)
     {
         <p>Everyone is caught up. Your next birthday measurement will appear here automatically.</p>
     }
     else
     {
         <div class="upcoming-list">
-            @foreach (var u in _upcoming)
+            @foreach (var u in _visibleUpcoming)
             {
                 <UpcomingMeasurementCard
                     PersonId="@u.PersonId"
@@ -44,10 +79,37 @@ else
         </div>
     }
 
-    <h2>Recent measurements</h2>
+    <div class="section-header">
+        <h2>Recent activity</h2>
+        @if (_recent.Count > 0)
+        {
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _showAllRecent = !_showAllRecent">
+                @(_showAllRecent ? "Show less" : "View all")
+            </button>
+        }
+    </div>
     @if (_recent.Count == 0)
     {
         <p>No measurements recorded yet.</p>
+    }
+    else if (!_showAllRecent)
+    {
+        <ul class="activity-feed">
+            @foreach (var r in _recent.Take(8))
+            {
+                <li class="activity-item">
+                    <div class="activity-main">
+                        <a href="people/@r.PersonId">@r.PersonName</a>
+                        <span class="activity-values">
+                            @UnitConverter.FormatHeight(r.HeightCm, _unitSystem)
+                            <span class="dot">·</span>
+                            @UnitConverter.FormatWeight(r.WeightKg, _unitSystem)
+                        </span>
+                    </div>
+                    <div class="activity-when">@RelativeTime(r.MeasurementDate)</div>
+                </li>
+            }
+        </ul>
     }
     else
     {
@@ -108,6 +170,7 @@ else
 @code {
     private bool _loading = true;
     private string _unitSystem = "Imperial";
+    private string _displayName = "there";
     private List<Family> _ownFamilies = new();
     private List<string> _sharedFamilies = new();
     private List<UpcomingRow> _upcoming = new();
@@ -119,6 +182,81 @@ else
     private List<VisiblePersonRow> _visibleRows = new();
     private List<Measurement> _allMeasurements = new();
 
+    private bool _showAllUpcoming;
+    private bool _showAllRecent;
+
+    private const int UpcomingWindowDays = 90;
+
+    private string Greeting
+    {
+        get
+        {
+            var hour = DateTime.Now.Hour;
+            if (hour < 12) return "Good morning";
+            if (hour < 18) return "Good afternoon";
+            return "Good evening";
+        }
+    }
+
+    private int _peopleCount => _visibleRows.Select(r => r.Id).Distinct(StringComparer.Ordinal).Count();
+
+    private int _measurementCount => _allMeasurements.Count;
+
+    private string _yearsTrackingText
+    {
+        get
+        {
+            if (_allMeasurements.Count == 0) return "—";
+
+            var dates = _allMeasurements
+                .Select(m => DateOnly.TryParse(m.MeasurementDate, out var d) ? d : (DateOnly?)null)
+                .Where(d => d is not null)
+                .Select(d => d!.Value)
+                .ToList();
+
+            if (dates.Count == 0) return "—";
+
+            var earliest = dates.Min();
+            var latest = dates.Max();
+            var years = (latest.DayNumber - earliest.DayNumber) / 365.25;
+
+            if (years < 1)
+            {
+                var months = Math.Max(1, (int)Math.Round((latest.DayNumber - earliest.DayNumber) / 30.44));
+                return months == 1 ? "1 mo" : $"{months} mo";
+            }
+
+            return $"{years:0.#} yr";
+        }
+    }
+
+    private bool _hasLongTailUpcoming
+        => _upcoming.Any(u => u.DaysUntilDue > UpcomingWindowDays);
+
+    private List<UpcomingRow> _visibleUpcoming
+        => _showAllUpcoming
+            ? _upcoming
+            : _upcoming.Where(u => u.DaysUntilDue <= UpcomingWindowDays).ToList();
+
+    private static string RelativeTime(string measurementDate)
+    {
+        if (!DateOnly.TryParse(measurementDate, out var date))
+        {
+            return measurementDate;
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var days = today.DayNumber - date.DayNumber;
+
+        if (days < 0) return date.ToString("MMM d, yyyy");
+        if (days == 0) return "Today";
+        if (days == 1) return "Yesterday";
+        if (days < 7) return $"{days} days ago";
+        if (days < 30) return $"{days / 7} week{(days / 7 == 1 ? "" : "s")} ago";
+        if (days < 365) return $"{days / 30} month{(days / 30 == 1 ? "" : "s")} ago";
+        return date.ToString("MMM d, yyyy");
+    }
+
     protected override async Task OnInitializedAsync()
     {
         var state = await AuthState.GetAuthenticationStateAsync();
@@ -127,9 +265,30 @@ else
 
         var user = await UserManager.FindByIdAsync(_userId);
         _unitSystem = user?.PreferredUnitSystem ?? "Imperial";
+        _displayName = ResolveDisplayName(user);
 
         await LoadAsync();
         _loading = false;
+    }
+
+    private static string ResolveDisplayName(ApplicationUser? user)
+    {
+        if (user is null) return "there";
+
+        var type = user.GetType();
+        var displayNameProp = type.GetProperty("DisplayName");
+        var displayName = displayNameProp?.GetValue(user) as string;
+        if (!string.IsNullOrWhiteSpace(displayName)) return displayName!;
+
+        if (!string.IsNullOrWhiteSpace(user.UserName)) return user.UserName!;
+
+        if (!string.IsNullOrWhiteSpace(user.Email))
+        {
+            var at = user.Email.IndexOf('@');
+            return at > 0 ? user.Email[..at] : user.Email;
+        }
+
+        return "there";
     }
 
     private async Task LoadAsync()
@@ -202,6 +361,16 @@ else
             .ThenBy(u => u.DaysUntilDue)
             .ThenBy(u => u.PersonName)
             .ToList();
+    }
+
+    private void OpenAddFromDashboard()
+    {
+        // Prefer the most urgent upcoming person; otherwise the first visible person.
+        var target = _visibleUpcoming.FirstOrDefault()?.PersonId
+            ?? _visibleRows.FirstOrDefault()?.Id;
+
+        if (target is null) return;
+        OpenDialog(target);
     }
 
     private void OpenDialog(string personId)
