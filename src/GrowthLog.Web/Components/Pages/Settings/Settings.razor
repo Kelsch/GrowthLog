@@ -16,6 +16,7 @@ else
     <h2>Account</h2>
     <EditForm Model="_model" OnValidSubmit="Save">
         <DataAnnotationsValidator />
+        <AntiforgeryToken />
         <div class="mb-3">
             <label class="form-label">Display name</label>
             <InputText @bind-Value="_model.DisplayName" class="form-control" />
