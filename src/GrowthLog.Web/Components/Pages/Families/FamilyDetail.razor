@@ -115,6 +115,7 @@ else
                     LatestHeightText="@UnitConverter.FormatHeight(latest?.HeightCm, _unitSystem)"
                     LatestWeightText="@UnitConverter.FormatWeight(latest?.WeightKg, _unitSystem)"
                     LastMeasuredText="@latest?.MeasurementDate"
+                    ShowMore="true"
                     ShowRemove="@_canMutate"
                     OnAddMeasurement="() => OpenDialog(p.Id)"
                     OnRemove="() => RemovePerson(p)" />
