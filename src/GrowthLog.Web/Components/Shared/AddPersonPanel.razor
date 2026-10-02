@@ -12,12 +12,12 @@
             <div class="add-person-tabs">
                 <button type="button"
                         class="add-person-tab @(_mode == "existing" ? "active" : "")"
-                        @onclick="() => _mode = "existing"">
+                        @onclick="() => SetMode("existing")">
                     Add existing person
                 </button>
                 <button type="button"
                         class="add-person-tab @(_mode == "new" ? "active" : "")"
-                        @onclick="() => _mode = "new"">
+                        @onclick="() => SetMode("new")">
                     Create new person
                 </button>
             </div>
@@ -151,6 +151,8 @@
         _expanded = !_expanded;
         _message = null;
     }
+
+    private void SetMode(string mode) => _mode = mode;
 
     private bool AlreadyInFamily(string personId)
         => CurrentMemberIds.Contains(personId);

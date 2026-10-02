@@ -84,9 +84,9 @@ else
 
     <div class="people-toolbar">
         <div class="people-filters">
-            <button class="filter-chip @(_filter == "all" ? "active" : "")" @onclick="() => _filter = "all"">All</button>
-            <button class="filter-chip @(_filter == "adults" ? "active" : "")" @onclick="() => _filter = "adults"">Adults</button>
-            <button class="filter-chip @(_filter == "children" ? "active" : "")" @onclick="() => _filter = "children"">Children</button>
+            <button class="filter-chip @(_filter == "all" ? "active" : "")" @onclick="() => SetFilter("all")">All</button>
+            <button class="filter-chip @(_filter == "adults" ? "active" : "")" @onclick="() => SetFilter("adults")">Adults</button>
+            <button class="filter-chip @(_filter == "children" ? "active" : "")" @onclick="() => SetFilter("children")">Children</button>
         </div>
         <div class="people-search">
             <input class="form-control" placeholder="Search people…"
@@ -198,6 +198,8 @@ else
 
     private string _filter = "all";
     private string? _peopleSearch;
+
+    private void SetFilter(string filter) => _filter = filter;
 
     private List<UpcomingRow> _upcoming = new();
     private bool _dialogOpen;
