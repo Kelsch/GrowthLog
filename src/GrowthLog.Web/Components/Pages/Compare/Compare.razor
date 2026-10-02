@@ -108,13 +108,16 @@ else
             @if (_rankedSameAgeRows.Count > 0)
             {
                 <div class="same-age-plot">
+                    @{ var rank = 0; }
                     @foreach (var row in _rankedSameAgeRows)
                     {
+                        rank++;
                         <div class="same-age-row">
+                            <div class="same-age-rank">@rank</div>
                             <div class="same-age-name">@row.PersonName</div>
                             <div class="same-age-bar-track">
                                 <div class="same-age-bar"
-                                     style="width:@(BarWidthPercent(row.Value!.Value))%;background:@ColorFor(row.PersonId)">
+                                     style="width:@(BarWidthPercent(row.Value!.Value).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;background:@ColorFor(row.PersonId)">
                                 </div>
                             </div>
                             <div class="same-age-value">@FormatValue(row.Value!.Value)</div>
@@ -463,6 +466,8 @@ else
     {
         var max = _sameAgeMaxValue;
         if (max <= 0) return 0;
+        // Scale to the max value in the ranked set so the tallest/heaviest
+        // person fills the track and everyone else is proportional to them.
         return Math.Max(2, value / max * 100);
     }
 
@@ -479,3 +484,78 @@ else
         return Palette[hash % Palette.Length];
     }
 }
+
+<style>
+    .same-age-plot {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .same-age-row {
+        display: grid;
+        grid-template-columns: 1.75rem minmax(8rem, 12rem) 1fr 5.5rem;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .same-age-rank {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #6b7280;
+        text-align: right;
+    }
+
+    .same-age-name {
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .same-age-bar-track {
+        position: relative;
+        height: 1.5rem;
+        background: #f1f3f5;
+        border-radius: 0.375rem;
+        overflow: hidden;
+    }
+
+    .same-age-bar {
+        height: 100%;
+        border-radius: 0.375rem;
+        transition: width 0.2s ease;
+    }
+
+    .same-age-value {
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .same-age-missing-section {
+        margin-top: 1rem;
+        padding: 0.75rem 1rem;
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        color: #6b7280;
+    }
+
+    .same-age-missing-heading {
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin: 0 0 0.5rem 0;
+        color: #6b7280;
+    }
+
+    .same-age-missing-list {
+        margin: 0;
+        padding-left: 1.25rem;
+    }
+
+    .same-age-missing-list li {
+        margin: 0.15rem 0;
+    }
+</style>
