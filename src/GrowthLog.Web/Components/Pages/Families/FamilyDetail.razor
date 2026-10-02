@@ -84,9 +84,9 @@ else
 
     <div class="people-toolbar">
         <div class="people-filters">
-            <button class="filter-chip @(_filter == "all" ? "active" : "")" @onclick="() => SetFilter("all")">All</button>
-            <button class="filter-chip @(_filter == "adults" ? "active" : "")" @onclick="() => SetFilter("adults")">Adults</button>
-            <button class="filter-chip @(_filter == "children" ? "active" : "")" @onclick="() => SetFilter("children")">Children</button>
+            <button class="filter-chip @(_filter == "all" ? "active" : "")" @onclick="(() => SetFilter("all"))">All</button>
+            <button class="filter-chip @(_filter == "adults" ? "active" : "")" @onclick="(() => SetFilter("adults"))">Adults</button>
+            <button class="filter-chip @(_filter == "children" ? "active" : "")" @onclick="(() => SetFilter("children"))">Children</button>
         </div>
         <div class="people-search">
             <input class="form-control" placeholder="Search people…"
