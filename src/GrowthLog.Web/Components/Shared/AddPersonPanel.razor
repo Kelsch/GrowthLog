@@ -12,12 +12,12 @@
             <div class="add-person-tabs">
                 <button type="button"
                         class="add-person-tab @(_mode == "existing" ? "active" : "")"
-                        @onclick="() => SetMode("existing")">
+                        @onclick="(() => SetMode("existing"))">
                     Add existing person
                 </button>
                 <button type="button"
                         class="add-person-tab @(_mode == "new" ? "active" : "")"
-                        @onclick="() => SetMode("new")">
+                        @onclick="(() => SetMode("new"))">
                     Create new person
                 </button>
             </div>
