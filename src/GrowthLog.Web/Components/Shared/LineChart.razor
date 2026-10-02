@@ -76,6 +76,8 @@
     [Parameter] public IReadOnlyList<GrowthLog.Web.Data.Charts.ChartSeries> Series { get; set; } = new List<GrowthLog.Web.Data.Charts.ChartSeries>();
     [Parameter] public string XAxisMode { get; set; } = GrowthLog.Web.Data.Charts.ChartXAxisModes.Age;
     [Parameter] public string YUnit { get; set; } = "cm";
+    /// <summary>"Imperial" or "Metric" — controls how Y values are labeled.</summary>
+    [Parameter] public string UnitSystem { get; set; } = "Imperial";
     /// <summary>When set, this person's series is emphasized and others are muted.</summary>
     [Parameter] public string? HighlightedPersonId { get; set; }
     [Parameter] public EventCallback<string> OnLegendClick { get; set; }
@@ -158,8 +160,8 @@
 
     private string FormatY(double v)
         => YUnit == "kg"
-            ? $"{v:0.#} kg"
-            : $"{v:0.#} cm";
+            ? UnitConverter.FormatWeight(v, UnitSystem)
+            : UnitConverter.FormatHeight(v, UnitSystem);
 
     private string FormatX(double v)
         => XAxisMode == GrowthLog.Web.Data.Charts.ChartXAxisModes.Age

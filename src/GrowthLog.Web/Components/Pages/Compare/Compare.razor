@@ -6,6 +6,7 @@
 @inject PersonRepository People
 @inject ChartDataService Charts
 @inject AuthenticationStateProvider AuthState
+@inject UserManager<ApplicationUser> UserManager
 
 <PageTitle>Compare — GrowthLog</PageTitle>
 
@@ -155,6 +156,7 @@ else
         <LineChart Series="_series"
                    XAxisMode="_xAxis"
                    YUnit="@(_metric == ChartMetrics.Weight ? "kg" : "cm")"
+                   UnitSystem="_unitSystem"
                    HighlightedPersonId="_highlightedPersonId"
                    OnLegendClick="OnLegendClick" />
     }
@@ -240,6 +242,7 @@ else
     private string _metric = ChartMetrics.Height;
     private string _xAxis = ChartXAxisModes.Age;
     private string? _userId;
+    private string _unitSystem = "Imperial";
     private double _selectedAge = 10;
     private string? _highlightedPersonId;
     private bool _showDetails;
@@ -263,6 +266,9 @@ else
         var state = await AuthState.GetAuthenticationStateAsync();
         _userId = state.User.GetUserId();
         if (_userId is null) return;
+
+        var user = await UserManager.FindByIdAsync(_userId);
+        _unitSystem = UnitConverter.NormalizeUnitSystem(user?.PreferredUnitSystem);
 
         _families = (await Families.GetForUserAsync(_userId)).ToList();
         foreach (var f in _families) _selectedFamilyIds.Add(f.Id);
@@ -414,7 +420,9 @@ else
     }
 
     private string FormatValue(double v)
-        => _metric == ChartMetrics.Weight ? $"{v:0.#} kg" : $"{v:0.#} cm";
+        => _metric == ChartMetrics.Weight
+            ? UnitConverter.FormatWeight(v, _unitSystem)
+            : UnitConverter.FormatHeight(v, _unitSystem);
 
     private double MinAge => 0;
 

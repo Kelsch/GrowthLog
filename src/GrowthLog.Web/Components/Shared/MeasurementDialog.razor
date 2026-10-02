@@ -32,15 +32,35 @@
                 <InputDate id="md-date" @bind-Value="_model.Date" class="form-control" />
             </div>
 
-            <div class="mb-3">
-                <label class="form-label" for="md-height">Height (cm)</label>
-                <InputNumber id="md-height" @bind-Value="_model.HeightCm" class="form-control" step="0.1" />
-            </div>
+            @if (_unitSystem == "Metric")
+            {
+                <div class="mb-3">
+                    <label class="form-label" for="md-height">Height (cm)</label>
+                    <InputNumber id="md-height" @bind-Value="_model.HeightCm" class="form-control" step="0.1" />
+                </div>
 
-            <div class="mb-3">
-                <label class="form-label" for="md-weight">Weight (kg)</label>
-                <InputNumber id="md-weight" @bind-Value="_model.WeightKg" class="form-control" step="0.1" />
-            </div>
+                <div class="mb-3">
+                    <label class="form-label" for="md-weight">Weight (kg)</label>
+                    <InputNumber id="md-weight" @bind-Value="_model.WeightKg" class="form-control" step="0.1" />
+                </div>
+            }
+            else
+            {
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label" for="md-height-ft">Height (ft)</label>
+                        <InputNumber id="md-height-ft" @bind-Value="_model.HeightFeet" class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="md-height-in">Height (in)</label>
+                        <InputNumber id="md-height-in" @bind-Value="_model.HeightInches" class="form-control" step="0.1" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="md-weight-lb">Weight (lb)</label>
+                        <InputNumber id="md-weight-lb" @bind-Value="_model.WeightPounds" class="form-control" step="0.1" />
+                    </div>
+                </div>
+            }
 
             <div class="mb-3">
                 <label class="form-label" for="md-notes">Notes</label>
@@ -68,46 +88,87 @@
     [Inject] private MeasurementRepository Measurements { get; set; } = default!;
     [Inject] private AuditRepository Audit { get; set; } = default!;
     [Inject] private AuthenticationStateProvider AuthState { get; set; } = default!;
+    [Inject] private UserManager<ApplicationUser> UserManager { get; set; } = default!;
 
     private readonly EntryModel _model = new();
     private bool _saving;
     private string? _error;
     private string? _ageText;
+    private string _unitSystem = "Imperial";
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
-        if (IsOpen && Person is not null)
-        {
-            _error = null;
+        if (!IsOpen || Person is null) return;
 
-            if (Existing is not null)
+        _error = null;
+
+        var state = await AuthState.GetAuthenticationStateAsync();
+        var userId = state.User.GetUserId();
+        if (userId is not null)
+        {
+            var user = await UserManager.FindByIdAsync(userId);
+            _unitSystem = UnitConverter.NormalizeUnitSystem(user?.PreferredUnitSystem);
+        }
+
+        if (Existing is not null)
+        {
+            // Edit mode: prefill from the existing measurement, converted to
+            // the user's preferred display units.
+            _model.Date = DateOnly.TryParse(Existing.MeasurementDate, out var d)
+                ? d.ToDateTime(TimeOnly.MinValue)
+                : DateTime.Today;
+            _model.Notes = Existing.Notes;
+
+            if (_unitSystem == "Metric")
             {
-                // Edit mode: prefill from the existing measurement.
-                _model.Date = DateOnly.TryParse(Existing.MeasurementDate, out var d)
-                    ? d.ToDateTime(TimeOnly.MinValue)
-                    : DateTime.Today;
                 _model.HeightCm = Existing.HeightCm;
                 _model.WeightKg = Existing.WeightKg;
-                _model.Notes = Existing.Notes;
+                _model.HeightFeet = null;
+                _model.HeightInches = null;
+                _model.WeightPounds = null;
             }
             else
             {
-                // Smart defaults: today's date, empty values, age from DOB.
-                _model.Date = DateTime.Today;
                 _model.HeightCm = null;
                 _model.WeightKg = null;
-                _model.Notes = null;
-            }
 
-            if (DateOnly.TryParse(Person.DateOfBirth, out var dob))
-            {
-                var age = AgeCalculator.GetAgeYears(dob, DateOnly.FromDateTime(_model.Date));
-                _ageText = $"Age {age:0.#}";
+                if (Existing.HeightCm is not null)
+                {
+                    var (feet, inches) = UnitConverter.CmToFeetInches(Existing.HeightCm.Value);
+                    _model.HeightFeet = feet;
+                    _model.HeightInches = Math.Round(inches, 1);
+                }
+                else
+                {
+                    _model.HeightFeet = null;
+                    _model.HeightInches = null;
+                }
+
+                _model.WeightPounds = Existing.WeightKg is null
+                    ? null
+                    : Math.Round(UnitConverter.KgToPounds(Existing.WeightKg.Value), 1);
             }
-            else
-            {
-                _ageText = null;
-            }
+        }
+        else
+        {
+            // Smart defaults: today's date, empty values, age from DOB.
+            _model.Date = DateTime.Today;
+            _model.HeightCm = null;
+            _model.WeightKg = null;
+            _model.HeightFeet = null;
+            _model.HeightInches = null;
+            _model.WeightPounds = null;
+            _model.Notes = null;
+        }
+
+        if (DateOnly.TryParse(Person.DateOfBirth, out var dob))
+        {
+            var age = AgeCalculator.GetAgeYears(dob, DateOnly.FromDateTime(_model.Date));
+            _ageText = $"Age {age:0.#}";
+        }
+        else
+        {
+            _ageText = null;
         }
     }
 
@@ -130,19 +191,25 @@
 
         _error = null;
 
-        if (_model.HeightCm is null && _model.WeightKg is null)
+        // Convert whatever the user typed into canonical cm / kg for storage.
+        var heightCm = UnitConverter.ParseHeightToCm(
+            _unitSystem, _model.HeightCm, _model.HeightFeet, _model.HeightInches);
+        var weightKg = UnitConverter.ParseWeightToKg(
+            _unitSystem, _model.WeightKg, _model.WeightPounds);
+
+        if (heightCm is null && weightKg is null)
         {
             _error = "Enter a height or a weight.";
             return;
         }
 
-        if (_model.HeightCm is <= 0)
+        if (heightCm is <= 0)
         {
             _error = "Height must be greater than 0.";
             return;
         }
 
-        if (_model.WeightKg is <= 0)
+        if (weightKg is <= 0)
         {
             _error = "Weight must be greater than 0.";
             return;
@@ -172,8 +239,8 @@
                 {
                     PersonId = Person.Id,
                     MeasurementDate = _model.Date.ToString("yyyy-MM-dd"),
-                    HeightCm = _model.HeightCm,
-                    WeightKg = _model.WeightKg,
+                    HeightCm = heightCm,
+                    WeightKg = weightKg,
                     Notes = string.IsNullOrWhiteSpace(_model.Notes) ? null : _model.Notes,
                     EnteredByUserId = userId
                 };
@@ -184,8 +251,8 @@
             else
             {
                 Existing.MeasurementDate = _model.Date.ToString("yyyy-MM-dd");
-                Existing.HeightCm = _model.HeightCm;
-                Existing.WeightKg = _model.WeightKg;
+                Existing.HeightCm = heightCm;
+                Existing.WeightKg = weightKg;
                 Existing.Notes = string.IsNullOrWhiteSpace(_model.Notes) ? null : _model.Notes;
                 Existing.ModifiedUtc = DateTime.UtcNow.ToString("o");
 
@@ -206,6 +273,9 @@
         public DateTime Date { get; set; } = DateTime.Today;
         public double? HeightCm { get; set; }
         public double? WeightKg { get; set; }
+        public int? HeightFeet { get; set; }
+        public double? HeightInches { get; set; }
+        public double? WeightPounds { get; set; }
         public string? Notes { get; set; }
     }
 }
