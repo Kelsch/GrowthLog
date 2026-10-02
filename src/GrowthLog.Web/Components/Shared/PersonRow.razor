@@ -49,6 +49,10 @@
         <button class="btn btn-sm btn-primary" @onclick="OnAddMeasurement">
             + Add measurement
         </button>
+        @if (ShowMore)
+        {
+            <a class="btn btn-sm btn-outline-secondary" href="people/@PersonId">More</a>
+        }
         @if (ShowRemove)
         {
             <button class="btn btn-sm btn-outline-danger" @onclick="OnRemove">
@@ -68,6 +72,7 @@
     [Parameter] public string? LatestWeightText { get; set; }
     [Parameter] public string? LastMeasuredText { get; set; }
     [Parameter] public bool ShowRemove { get; set; }
+    [Parameter] public bool ShowMore { get; set; }
     [Parameter] public EventCallback OnAddMeasurement { get; set; }
     [Parameter] public EventCallback OnRemove { get; set; }
 
