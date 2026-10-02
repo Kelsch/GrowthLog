@@ -105,34 +105,48 @@ else
         }
         else
         {
-            <div class="same-age-plot">
-                @foreach (var row in _sameAgeRows)
-                {
-                    <div class="same-age-row">
-                        <div class="same-age-name">@row.PersonName</div>
-                        <div class="same-age-bar-track">
-                            @if (row.Value is null)
-                            {
-                                <span class="same-age-missing">No measurement near age @_selectedAge.ToString("0.#")</span>
-                            }
-                            else
-                            {
+            @if (_rankedSameAgeRows.Count > 0)
+            {
+                <div class="same-age-plot">
+                    @foreach (var row in _rankedSameAgeRows)
+                    {
+                        <div class="same-age-row">
+                            <div class="same-age-name">@row.PersonName</div>
+                            <div class="same-age-bar-track">
                                 <div class="same-age-bar"
-                                     style="width:@(BarWidthPercent(row.Value.Value))%;background:@ColorFor(row.PersonId)">
+                                     style="width:@(BarWidthPercent(row.Value!.Value))%;background:@ColorFor(row.PersonId)">
                                 </div>
-                            }
+                            </div>
+                            <div class="same-age-value">@FormatValue(row.Value!.Value)</div>
                         </div>
-                        <div class="same-age-value">
-                            @(row.Value is null ? "—" : FormatValue(row.Value.Value))
-                        </div>
-                    </div>
-                }
-            </div>
+                    }
+                </div>
+            }
+
+            @if (_missingSameAgeRows.Count > 0)
+            {
+                <div class="same-age-missing-section">
+                    <h3 class="same-age-missing-heading">No measurement near age @_selectedAge.ToString("0.#")</h3>
+                    <ul class="same-age-missing-list">
+                        @foreach (var row in _missingSameAgeRows)
+                        {
+                            <li>@row.PersonName</li>
+                        }
+                    </ul>
+                </div>
+            }
         }
     }
     else
     {
         <h2>@_metric over @(_xAxis == ChartXAxisModes.Age ? "age" : "date")</h2>
+        @if (_series.Count > MaxTrajectoryPeople)
+        {
+            <p class="text-muted">
+                Showing @_series.Count people. Click a name in the legend to focus one person,
+                or uncheck people above to reduce clutter.
+            </p>
+        }
         <LineChart Series="_series"
                    XAxisMode="_xAxis"
                    YUnit="@(_metric == ChartMetrics.Weight ? "kg" : "cm")"
@@ -140,59 +154,67 @@ else
                    OnLegendClick="OnLegendClick" />
     }
 
-    <h2 class="mt-4">Comparison details</h2>
-    @if (_series.Count == 0)
+    <div class="section-header mt-4">
+        <h2>Comparison details</h2>
+        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _showDetails = !_showDetails">
+            @(_showDetails ? "Hide details" : "Show details")
+        </button>
+    </div>
+    @if (_showDetails)
     {
-        <p>No data to compare.</p>
-    }
-    else if (_mode == CompareModes.SameAge)
-    {
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Person</th>
-                    <th>@_metric</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var row in _sameAgeRows)
-                {
+        if (_series.Count == 0)
+        {
+            <p>No data to compare.</p>
+        }
+        else if (_mode == CompareModes.SameAge)
+        {
+            <table class="table">
+                <thead>
                     <tr>
-                        <td>@row.PersonName</td>
-                        <td>@(row.Value is null ? "—" : FormatValue(row.Value.Value))</td>
+                        <th>Person</th>
+                        <th>@_metric</th>
                     </tr>
-                }
-            </tbody>
-        </table>
-        <p class="text-muted">Values show the nearest actual measurement within ±6 months of age @_selectedAge.ToString("0.#"). Missing values are not interpolated.</p>
-    }
-    else
-    {
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Age (years)</th>
-                    @foreach (var s in _series)
+                </thead>
+                <tbody>
+                    @foreach (var row in _sameAgeRows)
                     {
-                        <th>@s.PersonName</th>
+                        <tr>
+                            <td>@row.PersonName</td>
+                            <td>@(row.Value is null ? "—" : FormatValue(row.Value.Value))</td>
+                        </tr>
                     }
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var age in _tableAges)
-                {
+                </tbody>
+            </table>
+            <p class="text-muted">Values show the nearest actual measurement within ±6 months of age @_selectedAge.ToString("0.#"). Missing values are not interpolated.</p>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
                     <tr>
-                        <td>@age</td>
+                        <th>Age (years)</th>
                         @foreach (var s in _series)
                         {
-                            var pt = s.Points.FirstOrDefault(p => Math.Abs(p.AgeYears - age) < 0.5);
-                            <td>@(pt is null ? "—" : FormatValue(pt.Y))</td>
+                            <th>@s.PersonName</th>
                         }
                     </tr>
-                }
-            </tbody>
-        </table>
-        <p class="text-muted">Values shown are the nearest actual measurement within ±6 months of each age. Missing values are not interpolated.</p>
+                </thead>
+                <tbody>
+                    @foreach (var age in _tableAges)
+                    {
+                        <tr>
+                            <td>@age</td>
+                            @foreach (var s in _series)
+                            {
+                                var pt = s.Points.FirstOrDefault(p => Math.Abs(p.AgeYears - age) < 0.5);
+                                <td>@(pt is null ? "—" : FormatValue(pt.Y))</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p class="text-muted">Values shown are the nearest actual measurement within ±6 months of each age. Missing values are not interpolated.</p>
+        }
     }
 }
 
@@ -204,6 +226,7 @@ else
     }
 
     private const double AgeToleranceYears = 0.5; // ±6 months
+    private const int MaxTrajectoryPeople = 8;
 
     private bool _loading = true;
     private string _mode = CompareModes.SameAge;
@@ -212,6 +235,7 @@ else
     private string? _userId;
     private double _selectedAge = 10;
     private string? _highlightedPersonId;
+    private bool _showDetails;
 
     private List<Family> _families = new();
     private List<Person> _people = new();
@@ -265,7 +289,9 @@ else
             .ThenBy(p => p.LastName)
             .ToList();
 
-        foreach (var p in _people) _selectedPersonIds.Add(p.Id);
+        // Default to a readable number of people for the trajectory chart.
+        // Users can still check more; this just avoids an unreadable default.
+        foreach (var p in _people.Take(MaxTrajectoryPeople)) _selectedPersonIds.Add(p.Id);
 
         await LoadAsync();
         _loading = false;
@@ -424,8 +450,14 @@ else
         }
     }
 
+    private List<SameAgeRow> _rankedSameAgeRows
+        => _sameAgeRows.Where(r => r.Value is not null).ToList();
+
+    private List<SameAgeRow> _missingSameAgeRows
+        => _sameAgeRows.Where(r => r.Value is null).ToList();
+
     private double _sameAgeMaxValue
-        => _sameAgeRows.Where(r => r.Value is not null).Select(r => r.Value!.Value).DefaultIfEmpty(1).Max();
+        => _rankedSameAgeRows.Select(r => r.Value!.Value).DefaultIfEmpty(1).Max();
 
     private double BarWidthPercent(double value)
     {

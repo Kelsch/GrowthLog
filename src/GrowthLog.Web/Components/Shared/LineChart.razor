@@ -106,9 +106,10 @@
         if (Math.Abs(_maxX - _minX) < 0.001) { _maxX = _minX + 1; }
         if (Math.Abs(_maxY - _minY) < 0.001) { _maxY = _minY + 1; }
 
-        // Add a little headroom on Y.
+        // Add a little headroom on Y, but never let the floor go negative —
+        // height and weight are always non-negative quantities.
         var pad = (_maxY - _minY) * 0.08;
-        _minY -= pad;
+        _minY = Math.Max(0, _minY - pad);
         _maxY += pad;
     }
 
