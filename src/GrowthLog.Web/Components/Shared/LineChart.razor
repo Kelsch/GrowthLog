@@ -39,7 +39,10 @@
             {
                 var color = ColorFor(s.PersonId);
                 var muted = HighlightedPersonId is not null && HighlightedPersonId != s.PersonId;
-                var pts = s.Points.OrderBy(p => p.X).ToList();
+                // Skip non-positive values so a missing/zero measurement never
+                // draws a bogus dive to the baseline. Points are actual
+                // measurements only — no interpolation.
+                var pts = s.Points.Where(p => p.Y > 0).OrderBy(p => p.X).ToList();
                 if (pts.Count > 1)
                 {
                     <polyline fill="none" stroke="@color" stroke-width="@(muted ? 1 : 2)"
@@ -109,7 +112,9 @@
         if (Math.Abs(_maxY - _minY) < 0.001) { _maxY = _minY + 1; }
 
         // Add a little headroom on Y, but never let the floor go negative —
-        // height and weight are always non-negative quantities.
+        // height and weight are always non-negative quantities. We keep the
+        // floor close to the real minimum so small changes stay visible
+        // instead of being flattened against a hard zero baseline.
         var pad = (_maxY - _minY) * 0.08;
         _minY = Math.Max(0, _minY - pad);
         _maxY += pad;
@@ -162,6 +167,11 @@
         => YUnit == "kg"
             ? UnitConverter.FormatWeight(v, UnitSystem)
             : UnitConverter.FormatHeight(v, UnitSystem);
+
+    private string YAxisLabel
+        => YUnit == "kg"
+            ? (UnitSystem == "Metric" ? "Weight (kg)" : "Weight (lb)")
+            : (UnitSystem == "Metric" ? "Height (cm)" : "Height (in)");
 
     private string FormatX(double v)
         => XAxisMode == GrowthLog.Web.Data.Charts.ChartXAxisModes.Age

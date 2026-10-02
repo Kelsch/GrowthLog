@@ -153,6 +153,14 @@ else
                 or uncheck people above to reduce clutter.
             </p>
         }
+        @if (_highlightedPersonId is not null)
+        {
+            <p>
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _highlightedPersonId = null">
+                    Show all people
+                </button>
+            </p>
+        }
         <LineChart Series="_series"
                    XAxisMode="_xAxis"
                    YUnit="@(_metric == ChartMetrics.Weight ? "kg" : "cm")"
@@ -235,7 +243,7 @@ else
     }
 
     private const double AgeToleranceYears = 0.5; // ±6 months
-    private const int MaxTrajectoryPeople = 8;
+    private const int MaxTrajectoryPeople = 5;
 
     private bool _loading = true;
     private string _mode = CompareModes.SameAge;
