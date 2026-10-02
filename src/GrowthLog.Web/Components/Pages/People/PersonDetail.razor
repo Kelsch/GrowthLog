@@ -25,14 +25,111 @@ else if (!_canView)
 }
 else
 {
-    <h1>@_person.FullName</h1>
-    <p>
-        Born @_person.DateOfBirth
-        @if (_dateOfBirth is not null)
+    <div class="person-header">
+        <div class="person-header-avatar" aria-hidden="true">@Initial</div>
+        <div class="person-header-main">
+            <h1>@_person.FullName</h1>
+            <div class="person-header-meta">
+                @if (_dateOfBirth is not null)
+                {
+                    <span>Age @AgeCalculator.FormatAge(_dateOfBirth.Value, DateOnly.FromDateTime(DateTime.Today))</span>
+                    <span class="dot">·</span>
+                }
+                <span>Born @_person.DateOfBirth</span>
+                @if (_primaryFamilyName is not null)
+                {
+                    <span class="dot">·</span>
+                    <span>@_primaryFamilyName</span>
+                }
+            </div>
+        </div>
+        <div class="person-header-actions">
+            @if (_canMutate)
+            {
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _editingPerson = !_editingPerson">
+                    Edit person
+                </button>
+                <button type="button" class="btn btn-sm btn-primary" @onclick="OpenAddDialog">
+                    + Add measurement
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (_editingPerson && _canMutate)
+    {
+        <EditForm Model="_personEdit" OnValidSubmit="SavePerson">
+            <DataAnnotationsValidator />
+            <div class="row g-2 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label">First name</label>
+                    <InputText @bind-Value="_personEdit.FirstName" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Middle name</label>
+                    <InputText @bind-Value="_personEdit.MiddleName" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Last name</label>
+                    <InputText @bind-Value="_personEdit.LastName" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Date of birth</label>
+                    <InputDate @bind-Value="_personEdit.DateOfBirth" class="form-control" />
+                </div>
+            </div>
+            <div class="mb-3">
+                <AntiforgeryToken />
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="() => _editingPerson = false">Cancel</button>
+            </div>
+        </EditForm>
+    }
+
+    <div class="metric-cards">
+        <div class="metric-card">
+            <div class="metric-card-label">Height</div>
+            <div class="metric-card-value">@UnitConverter.FormatHeight(_stats?.CurrentHeightCm, _unitSystem)</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-card-label">Weight</div>
+            <div class="metric-card-value">@UnitConverter.FormatWeight(_stats?.CurrentWeightKg, _unitSystem)</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-card-label">Last measured</div>
+            <div class="metric-card-value">@(_latestMeasurementDate ?? "—")</div>
+        </div>
+    </div>
+
+    <h2>Growth</h2>
+    @if (_heightSeries.Count == 0 && _weightSeries.Count == 0)
+    {
+        <p class="text-muted">No measurements to chart yet.</p>
+    }
+    else
+    {
+        <div class="chart-toolbar">
+            <div class="chart-metric-toggle">
+                <button class="filter-chip @(_metric == "height" ? "active" : "")" @onclick='() => SetMetric("height")'>Height</button>
+                <button class="filter-chip @(_metric == "weight" ? "active" : "")" @onclick='() => SetMetric("weight")'>Weight</button>
+            </div>
+            <div class="chart-range-toggle">
+                <button class="filter-chip @(_range == "all" ? "active" : "")" @onclick='() => SetRange("all")'>All</button>
+                <button class="filter-chip @(_range == "1y" ? "active" : "")" @onclick='() => SetRange("1y")'>1Y</button>
+                <button class="filter-chip @(_range == "2y" ? "active" : "")" @onclick='() => SetRange("2y")'>2Y</button>
+                <button class="filter-chip @(_range == "5y" ? "active" : "")" @onclick='() => SetRange("5y")'>5Y</button>
+            </div>
+        </div>
+
+        @if (_metric == "height")
         {
-            <span> · @AgeCalculator.FormatAge(_dateOfBirth.Value, DateOnly.FromDateTime(DateTime.Today))</span>
+            <LineChart Series="_visibleHeightSeries" XAxisMode="Age" YUnit="cm" />
         }
-    </p>
+        else
+        {
+            <LineChart Series="_visibleWeightSeries" XAxisMode="Age" YUnit="kg" />
+        }
+    }
 
     <h2>Families</h2>
     @if (_memberships.Count == 0)
@@ -104,33 +201,11 @@ else
         </ul>
     }
 
-    <h2>Growth</h2>
-    @if (_heightSeries.Count == 0 && _weightSeries.Count == 0)
+    @if (_stats is not null && _stats.Count > 0)
     {
-        <p>No measurements to chart yet.</p>
-    }
-    else
-    {
-        <h3>Height</h3>
-        <LineChart Series="_heightSeries" XAxisMode="Age" YUnit="cm" />
-
-        <h3>Weight</h3>
-        <LineChart Series="_weightSeries" XAxisMode="Age" YUnit="kg" />
-    }
-
-    @if (_stats is not null)
-    {
-        <h3>Statistics</h3>
+        <h2>Statistics</h2>
         <ul>
             <li>Measurements: @_stats.Count</li>
-            @if (_stats.CurrentHeightCm is not null)
-            {
-                <li>Current height: @UnitConverter.FormatHeight(_stats.CurrentHeightCm, _unitSystem)</li>
-            }
-            @if (_stats.CurrentWeightKg is not null)
-            {
-                <li>Current weight: @UnitConverter.FormatWeight(_stats.CurrentWeightKg, _unitSystem)</li>
-            }
             @if (_stats.HeightChangeCm is not null)
             {
                 <li>Height change since previous: @(_stats.HeightChangeCm >= 0 ? "+" : "")@_stats.HeightChangeCm.Value.ToString("0.0") cm</li>
@@ -142,7 +217,7 @@ else
         </ul>
     }
 
-    <h2>Measurements</h2>
+    <h2>Measurement history</h2>
 
     @if (_measurements.Count == 0)
     {
@@ -176,67 +251,25 @@ else
                         @if (_canMutate)
                         {
                             <td>
-                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => BeginEdit(m)">Edit</button>
-                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteMeasurement(m)">Delete</button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenEditDialog(m)">Edit</button>
+                                @if (_confirmDeleteId == m.Id)
+                                {
+                                    <span class="confirm-inline">
+                                        Delete?
+                                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteMeasurement(m)">Yes</button>
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => _confirmDeleteId = null">No</button>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => _confirmDeleteId = m.Id">Delete</button>
+                                }
                             </td>
                         }
                     </tr>
                 }
             </tbody>
         </table>
-    }
-
-    @if (_canMutate)
-    {
-        <h3>@(_editing is null ? "Record measurement" : "Edit measurement")</h3>
-        <EditForm Model="_entry" OnValidSubmit="SaveMeasurement">
-            <DataAnnotationsValidator />
-            <div class="row g-2">
-                <div class="col-md-3">
-                    <label class="form-label">Date</label>
-                    <InputDate @bind-Value="_entry.Date" class="form-control" />
-                </div>
-
-                @if (_unitSystem == "Metric")
-                {
-                    <div class="col-md-2">
-                        <label class="form-label">Height (cm)</label>
-                        <InputNumber @bind-Value="_entry.HeightCm" class="form-control" step="0.1" />
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Weight (kg)</label>
-                        <InputNumber @bind-Value="_entry.WeightKg" class="form-control" step="0.1" />
-                    </div>
-                }
-                else
-                {
-                    <div class="col-md-1">
-                        <label class="form-label">Height (ft)</label>
-                        <InputNumber @bind-Value="_entry.HeightFeet" class="form-control" />
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Height (in)</label>
-                        <InputNumber @bind-Value="_entry.HeightInches" class="form-control" step="0.1" />
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Weight (lb)</label>
-                        <InputNumber @bind-Value="_entry.WeightPounds" class="form-control" step="0.1" />
-                    </div>
-                }
-
-                <div class="col-md-3">
-                    <label class="form-label">Notes</label>
-                    <InputText @bind-Value="_entry.Notes" class="form-control" />
-                </div>
-                <div class="col-md-1 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary">Save</button>
-                </div>
-            </div>
-            @if (_editing is not null)
-            {
-                <button type="button" class="btn btn-link mt-2" @onclick="CancelEdit">Cancel</button>
-            }
-        </EditForm>
     }
 
     @if (_canMutate)
@@ -268,6 +301,12 @@ else
             </div>
         </EditForm>
     }
+
+    <MeasurementDialog IsOpen="_dialogOpen"
+                       Person="_person"
+                       Existing="_dialogExisting"
+                       OnClose="CloseDialog"
+                       OnSaved="OnMeasurementSaved" />
 }
 
 @code {
@@ -291,9 +330,58 @@ else
     private bool _canMutate;
     private string _unitSystem = "Imperial";
     private string? _userId;
-    private Measurement? _editing;
     private readonly NewRelationshipModel _newRel = new();
-    private MeasurementEntryModel _entry = new();
+
+    private string _metric = "height";
+    private string _range = "all";
+    private bool _editingPerson;
+    private bool _dialogOpen;
+    private Measurement? _dialogExisting;
+    private string? _confirmDeleteId;
+    private string? _primaryFamilyName;
+    private string? _latestMeasurementDate;
+    private readonly PersonEditModel _personEdit = new();
+
+    private string Initial
+        => string.IsNullOrWhiteSpace(_person?.FullName)
+            ? "?"
+            : _person!.FullName.Trim()[0].ToString().ToUpperInvariant();
+
+    private void SetMetric(string metric) => _metric = metric;
+    private void SetRange(string range) => _range = range;
+
+    private IReadOnlyList<GrowthLog.Web.Data.Charts.ChartSeries> _visibleHeightSeries
+        => ApplyRange(_heightSeries);
+
+    private IReadOnlyList<GrowthLog.Web.Data.Charts.ChartSeries> _visibleWeightSeries
+        => ApplyRange(_weightSeries);
+
+    private IReadOnlyList<GrowthLog.Web.Data.Charts.ChartSeries> ApplyRange(
+        IReadOnlyList<GrowthLog.Web.Data.Charts.ChartSeries> series)
+    {
+        if (_range == "all" || _dateOfBirth is null) return series;
+
+        var years = _range switch
+        {
+            "1y" => 1,
+            "2y" => 2,
+            "5y" => 5,
+            _ => 0
+        };
+        if (years == 0) return series;
+
+        var maxAge = AgeCalculator.GetAgeYears(_dateOfBirth.Value, DateOnly.FromDateTime(DateTime.Today));
+        var minAge = Math.Max(0, maxAge - years);
+
+        return series
+            .Select(s => new GrowthLog.Web.Data.Charts.ChartSeries
+            {
+                PersonId = s.PersonId,
+                PersonName = s.PersonName,
+                Points = s.Points.Where(p => p.X >= minAge && p.X <= maxAge).ToList()
+            })
+            .ToList();
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -312,6 +400,11 @@ else
         {
             _dateOfBirth = dob;
         }
+
+        _personEdit.FirstName = _person.FirstName;
+        _personEdit.MiddleName = _person.MiddleName;
+        _personEdit.LastName = _person.LastName;
+        _personEdit.DateOfBirth = _dateOfBirth?.ToDateTime(TimeOnly.MinValue) ?? DateTime.Today;
 
         _memberships = (await PersonFamilies.GetForPersonAsync(PersonId)).ToList();
 
@@ -352,13 +445,12 @@ else
         if (!_canView) return;
 
         _relationships = (await Relationships.GetViewsForPersonAsync(PersonId)).ToList();
-        // Authorization-aware: returns an empty list if the user cannot see this person.
-        _measurements = (await Measurements.GetVisibleForUserForPersonAsync(userId, PersonId)).ToList();
+        await ReloadMeasurementsAsync(userId);
 
-        var personIds = new[] { PersonId };
-        _heightSeries = await Charts.GetSeriesAsync(userId, GrowthLog.Web.Data.Charts.ChartMetrics.Height, personIds);
-        _weightSeries = await Charts.GetSeriesAsync(userId, GrowthLog.Web.Data.Charts.ChartMetrics.Weight, personIds);
-        _stats = BuildStats(_measurements);
+        _primaryFamilyName = _memberships
+            .Where(m => m.IsActive)
+            .Select(m => _families.GetValueOrDefault(m.FamilyId)?.Name)
+            .FirstOrDefault(n => !string.IsNullOrWhiteSpace(n));
 
         // Candidate people: everyone in the families this person belongs to.
         var seen = new HashSet<string> { PersonId };
@@ -370,6 +462,64 @@ else
                 if (seen.Add(p.Id)) _candidates.Add(p);
             }
         }
+    }
+
+    private async Task ReloadMeasurementsAsync(string userId)
+    {
+        // Authorization-aware: returns an empty list if the user cannot see this person.
+        _measurements = (await Measurements.GetVisibleForUserForPersonAsync(userId, PersonId)).ToList();
+
+        var personIds = new[] { PersonId };
+        _heightSeries = await Charts.GetSeriesAsync(userId, GrowthLog.Web.Data.Charts.ChartMetrics.Height, personIds);
+        _weightSeries = await Charts.GetSeriesAsync(userId, GrowthLog.Web.Data.Charts.ChartMetrics.Weight, personIds);
+        _stats = BuildStats(_measurements);
+        _latestMeasurementDate = _measurements
+            .OrderByDescending(m => m.MeasurementDate)
+            .Select(m => m.MeasurementDate)
+            .FirstOrDefault();
+    }
+
+    private void OpenAddDialog()
+    {
+        _dialogExisting = null;
+        _dialogOpen = true;
+    }
+
+    private void OpenEditDialog(Measurement m)
+    {
+        _dialogExisting = m;
+        _dialogOpen = true;
+    }
+
+    private void CloseDialog()
+    {
+        _dialogOpen = false;
+        _dialogExisting = null;
+    }
+
+    private async Task OnMeasurementSaved()
+    {
+        CloseDialog();
+        if (_userId is not null)
+        {
+            await ReloadMeasurementsAsync(_userId);
+        }
+    }
+
+    private async Task SavePerson()
+    {
+        if (!_canMutate || _person is null || _userId is null) return;
+
+        _person.FirstName = _personEdit.FirstName;
+        _person.MiddleName = _personEdit.MiddleName;
+        _person.LastName = _personEdit.LastName;
+        _person.DateOfBirth = _personEdit.DateOfBirth.ToString("yyyy-MM-dd");
+
+        await People.UpdateAsync(_person);
+        await Audit.WriteAsync(_userId, "PersonEdited", "Person", _person.Id);
+
+        _dateOfBirth = DateOnly.TryParse(_person.DateOfBirth, out var dob) ? dob : null;
+        _editingPerson = false;
     }
 
     private async Task AddToFamily()
@@ -432,99 +582,6 @@ else
         return AgeCalculator.FormatAge(_dateOfBirth.Value, date);
     }
 
-    private void BeginEdit(Measurement m)
-    {
-        _editing = m;
-        _entry = new MeasurementEntryModel
-        {
-            Date = DateOnly.TryParse(m.MeasurementDate, out var d) ? d : DateOnly.FromDateTime(DateTime.Today),
-            Notes = m.Notes
-        };
-
-        if (_unitSystem == "Metric")
-        {
-            _entry.HeightCm = m.HeightCm;
-            _entry.WeightKg = m.WeightKg;
-        }
-        else
-        {
-            if (m.HeightCm is not null)
-            {
-                var (feet, inches) = UnitConverter.CmToFeetInches(m.HeightCm.Value);
-                _entry.HeightFeet = feet;
-                _entry.HeightInches = Math.Round(inches, 1);
-            }
-            if (m.WeightKg is not null)
-            {
-                _entry.WeightPounds = Math.Round(UnitConverter.KgToPounds(m.WeightKg.Value), 1);
-            }
-        }
-    }
-
-    private void CancelEdit()
-    {
-        _editing = null;
-        _entry = new MeasurementEntryModel();
-    }
-
-    private async Task SaveMeasurement()
-    {
-        if (!_canMutate || _userId is null) return;
-
-        // Server-side re-check: never trust the UI flag alone.
-        if (!await Authz.CanMutatePersonAsync(_userId, PersonId)) return;
-
-        double? heightCm = _unitSystem == "Metric"
-            ? _entry.HeightCm
-            : (_entry.HeightFeet is null && _entry.HeightInches is null
-                ? null
-                : UnitConverter.FeetInchesToCm(_entry.HeightFeet ?? 0, _entry.HeightInches ?? 0));
-
-        double? weightKg = _unitSystem == "Metric"
-            ? _entry.WeightKg
-            : (_entry.WeightPounds is null
-                ? null
-                : UnitConverter.PoundsToKg(_entry.WeightPounds.Value));
-
-        if (heightCm is null && weightKg is null)
-        {
-            return;
-        }
-
-        var date = _entry.Date.ToString("yyyy-MM-dd");
-
-        if (_editing is null)
-        {
-            var measurement = new Measurement
-            {
-                PersonId = PersonId,
-                MeasurementDate = date,
-                HeightCm = heightCm,
-                WeightKg = weightKg,
-                Notes = _entry.Notes,
-                EnteredByUserId = _userId
-            };
-
-            await Measurements.CreateAsync(measurement);
-            await Audit.WriteAsync(_userId, "MeasurementCreated", "Measurement", measurement.Id);
-        }
-        else
-        {
-            _editing.MeasurementDate = date;
-            _editing.HeightCm = heightCm;
-            _editing.WeightKg = weightKg;
-            _editing.Notes = _entry.Notes;
-            _editing.ModifiedUtc = DateTime.UtcNow.ToString("o");
-
-            await Measurements.UpdateAsync(_editing);
-            await Audit.WriteAsync(_userId, "MeasurementEdited", "Measurement", _editing.Id);
-        }
-
-        _editing = null;
-        _entry = new MeasurementEntryModel();
-        _measurements = (await Measurements.GetVisibleForUserForPersonAsync(_userId, PersonId)).ToList();
-    }
-
     private async Task DeleteMeasurement(Measurement m)
     {
         if (!_canMutate || _userId is null) return;
@@ -534,7 +591,8 @@ else
 
         await Measurements.SoftDeleteAsync(m.Id);
         await Audit.WriteAsync(_userId, "MeasurementDeleted", "Measurement", m.Id);
-        _measurements = (await Measurements.GetVisibleForUserForPersonAsync(_userId, PersonId)).ToList();
+        _confirmDeleteId = null;
+        await ReloadMeasurementsAsync(_userId);
     }
 
     private static GrowthStats BuildStats(List<Measurement> measurements)
@@ -579,14 +637,12 @@ else
         public string OtherPersonId { get; set; } = string.Empty;
     }
 
-    public class MeasurementEntryModel
+    public class PersonEditModel
     {
-        public DateOnly Date { get; set; } = DateOnly.FromDateTime(DateTime.Today);
-        public double? HeightCm { get; set; }
-        public double? WeightKg { get; set; }
-        public int? HeightFeet { get; set; }
-        public double? HeightInches { get; set; }
-        public double? WeightPounds { get; set; }
-        public string? Notes { get; set; }
+        [System.ComponentModel.DataAnnotations.Required]
+        public string FirstName { get; set; } = string.Empty;
+        public string? MiddleName { get; set; }
+        public string? LastName { get; set; }
+        public DateTime DateOfBirth { get; set; } = DateTime.Today;
     }
 }

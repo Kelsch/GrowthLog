@@ -1,4 +1,4 @@
-@* Modal for adding a measurement without leaving the current page.
+@* Modal for adding or editing a measurement without leaving the current page.
    Prefills today's date and shows the person's age from their DOB. *@
 
 @if (IsOpen && Person is not null)
@@ -6,7 +6,7 @@
     <div class="modal-backdrop" @onclick="Close"></div>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="measurement-dialog-title">
         <div class="modal-header">
-            <h3 id="measurement-dialog-title">Add measurement</h3>
+            <h3 id="measurement-dialog-title">@(Existing is null ? "Add measurement" : "Edit measurement")</h3>
             <button type="button" class="btn-link" aria-label="Close" @onclick="Close">✕</button>
         </div>
 
@@ -49,7 +49,7 @@
             <div class="modal-actions">
                 <button type="button" class="btn btn-outline-secondary" @onclick="Close">Cancel</button>
                 <button type="submit" class="btn btn-primary" disabled="@_saving">
-                    @(_saving ? "Saving…" : "Save measurement")
+                    @(_saving ? "Saving…" : (Existing is null ? "Save measurement" : "Save changes"))
                 </button>
             </div>
         </EditForm>
@@ -59,6 +59,8 @@
 @code {
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public Person? Person { get; set; }
+    /// <summary>When set, the dialog edits this measurement instead of creating one.</summary>
+    [Parameter] public Measurement? Existing { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnSaved { get; set; }
 
@@ -75,16 +77,30 @@
     {
         if (IsOpen && Person is not null)
         {
-            // Smart defaults: today's date, empty values, age from DOB.
-            _model.Date = DateTime.Today;
-            _model.HeightCm = null;
-            _model.WeightKg = null;
-            _model.Notes = null;
             _error = null;
+
+            if (Existing is not null)
+            {
+                // Edit mode: prefill from the existing measurement.
+                _model.Date = DateOnly.TryParse(Existing.MeasurementDate, out var d)
+                    ? d.ToDateTime(TimeOnly.MinValue)
+                    : DateTime.Today;
+                _model.HeightCm = Existing.HeightCm;
+                _model.WeightKg = Existing.WeightKg;
+                _model.Notes = Existing.Notes;
+            }
+            else
+            {
+                // Smart defaults: today's date, empty values, age from DOB.
+                _model.Date = DateTime.Today;
+                _model.HeightCm = null;
+                _model.WeightKg = null;
+                _model.Notes = null;
+            }
 
             if (DateOnly.TryParse(Person.DateOfBirth, out var dob))
             {
-                var age = AgeCalculator.GetAgeYears(dob, DateOnly.FromDateTime(DateTime.Today));
+                var age = AgeCalculator.GetAgeYears(dob, DateOnly.FromDateTime(_model.Date));
                 _ageText = $"Age {age:0.#}";
             }
             else
@@ -141,18 +157,32 @@
         _saving = true;
         try
         {
-            var measurement = new Measurement
+            if (Existing is null)
             {
-                PersonId = Person.Id,
-                MeasurementDate = _model.Date.ToString("yyyy-MM-dd"),
-                HeightCm = _model.HeightCm,
-                WeightKg = _model.WeightKg,
-                Notes = string.IsNullOrWhiteSpace(_model.Notes) ? null : _model.Notes,
-                EnteredByUserId = userId
-            };
+                var measurement = new Measurement
+                {
+                    PersonId = Person.Id,
+                    MeasurementDate = _model.Date.ToString("yyyy-MM-dd"),
+                    HeightCm = _model.HeightCm,
+                    WeightKg = _model.WeightKg,
+                    Notes = string.IsNullOrWhiteSpace(_model.Notes) ? null : _model.Notes,
+                    EnteredByUserId = userId
+                };
 
-            await Measurements.CreateAsync(measurement);
-            await Audit.WriteAsync(userId, "MeasurementCreated", "Measurement", measurement.Id);
+                await Measurements.CreateAsync(measurement);
+                await Audit.WriteAsync(userId, "MeasurementCreated", "Measurement", measurement.Id);
+            }
+            else
+            {
+                Existing.MeasurementDate = _model.Date.ToString("yyyy-MM-dd");
+                Existing.HeightCm = _model.HeightCm;
+                Existing.WeightKg = _model.WeightKg;
+                Existing.Notes = string.IsNullOrWhiteSpace(_model.Notes) ? null : _model.Notes;
+                Existing.ModifiedUtc = DateTime.UtcNow.ToString("o");
+
+                await Measurements.UpdateAsync(Existing);
+                await Audit.WriteAsync(userId, "MeasurementEdited", "Measurement", Existing.Id);
+            }
 
             await OnSaved.InvokeAsync();
         }
