@@ -1,0 +1,20 @@
+services:
+  growthlog:
+    image: ghcr.io/OWNER/growthlog:latest
+    # To build locally instead of pulling, comment out `image:` above and
+    # uncomment the build block below.
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    container_name: growthlog
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__GrowthLog: "Data Source=/data/growthlog.db"
+    volumes:
+      - growthlog-data:/data
+    restart: unless-stopped
+
+volumes:
+  growthlog-data:
