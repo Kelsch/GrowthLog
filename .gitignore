@@ -1,0 +1,4 @@
+.aider*
+/src/GrowthLog.Web/growthlog.db
+/src/GrowthLog.Web/growthlog.db-shm
+/src/GrowthLog.Web/growthlog.db-wal
