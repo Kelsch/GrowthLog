@@ -1,0 +1,148 @@
+is_global = true
+build_property.TargetFramework = net10.0
+build_property.TargetFramework = net10.0
+build_property.TargetPlatformMinVersion = 
+build_property.TargetPlatformMinVersion = 
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.ProjectTypeGuids = 
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = 
+build_property.InvariantGlobalization = 
+build_property.PlatformNeutralAssembly = 
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property.TargetFrameworkIdentifier = .NETCoreApp
+build_property.TargetFrameworkVersion = v10.0
+build_property.EntryPointFilePath = 
+build_property.RootNamespace = GrowthLog.Web
+build_property.RootNamespace = GrowthLog.Web
+build_property.ProjectDir = E:\Source\Repos\Kelsch\GrowthLog\src\GrowthLog.Web\
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.RazorLangVersion = 10.0
+build_property.SupportLocalizedComponentNames = 
+build_property.GenerateRazorMetadataSourceChecksumAttributes = 
+build_property.MSBuildProjectDirectory = E:\Source\Repos\Kelsch\GrowthLog\src\GrowthLog.Web
+build_property._RazorSourceGeneratorDebug = 
+build_property.EffectiveAnalysisLevelStyle = 10.0
+build_property.EnableCodeStyleSeverity = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/App.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xBcHAucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Layout/AccountLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcQWNjb3VudExheW91dC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Layout/MainLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcTWFpbkxheW91dC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Layout/NavMenu.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcTmF2TWVudS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/Account/AcceptInvitation.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBY2NvdW50XEFjY2VwdEludml0YXRpb24ucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/Account/AccessDenied.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBY2NvdW50XEFjY2Vzc0RlbmllZC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/Account/ForgotPassword.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBY2NvdW50XEZvcmdvdFBhc3N3b3JkLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/Account/Login.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBY2NvdW50XExvZ2luLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/Account/Register.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBY2NvdW50XFJlZ2lzdGVyLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/Account/ResetPassword.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBY2NvdW50XFJlc2V0UGFzc3dvcmQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/Compare/Compare.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDb21wYXJlXENvbXBhcmUucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/Families/FamilyDetail.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xGYW1pbGllc1xGYW1pbHlEZXRhaWwucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/Families/FamilyList.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xGYW1pbGllc1xGYW1pbHlMaXN0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/Home.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xIb21lLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/People/Mine.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQZW9wbGVcTWluZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/People/PeopleList.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQZW9wbGVcUGVvcGxlTGlzdC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/People/PersonDetail.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQZW9wbGVcUGVyc29uRGV0YWlsLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/Settings/Invitations.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTZXR0aW5nc1xJbnZpdGF0aW9ucy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/Settings/Settings.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTZXR0aW5nc1xTZXR0aW5ncy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Pages/Settings/Sharing.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTZXR0aW5nc1xTaGFyaW5nLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Routes.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xSb3V0ZXMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Shared/AddPersonPanel.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcQWRkUGVyc29uUGFuZWwucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Shared/EmptyState.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcRW1wdHlTdGF0ZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Shared/LineChart.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcTGluZUNoYXJ0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Shared/LoadingBlock.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcTG9hZGluZ0Jsb2NrLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Shared/MeasurementDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcTWVhc3VyZW1lbnREaWFsb2cucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Shared/PersonRow.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUGVyc29uUm93LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/Shared/UpcomingMeasurementCard.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcVXBjb21pbmdNZWFzdXJlbWVudENhcmQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/Source/Repos/Kelsch/GrowthLog/src/GrowthLog.Web/Components/_Imports.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xfSW1wb3J0cy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
