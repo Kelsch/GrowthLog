@@ -21,7 +21,10 @@ WORKDIR /app
 
 # Run as a non-root user. The /data volume is owned by this user so SQLite
 # can create and write the database file.
-RUN adduser --disabled-password --gecos "" --uid 10001 appuser \
+# The aspnet:10.0 runtime image is Debian-based and does not include the
+# `adduser` Perl wrapper, so use `useradd` from the shadow/passwd packages.
+RUN groupadd --gid 10001 appuser \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin appuser \
     && mkdir -p /data \
     && chown -R appuser:appuser /data /app
 
