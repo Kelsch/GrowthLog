@@ -177,13 +177,19 @@ else
                 </button>
             </p>
         }
-        <LineChart Series="_series"
+        @* <LineChart Series="_series"
                    XAxisMode="_xAxis"
                    YUnit="@(_metric == ChartMetrics.Weight ? "kg" : "cm")"
                    UnitSystem="_unitSystem"
                    HighlightedPersonId="_highlightedPersonId"
                    OnLegendClick="OnLegendClick"
-                   Class="chart-card" />
+                   Class="chart-card" /> *@
+
+        <LineChart Series="_series"
+                    XAxisMode="_xAxis"
+                    YUnit="cm"
+                    UnitSystem="_unitSystem"
+                    Class="chart-card" />
     }
     </div>
 

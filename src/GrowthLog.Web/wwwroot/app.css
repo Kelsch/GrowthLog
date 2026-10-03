@@ -881,6 +881,7 @@ main {
 .dashboard-col-upcoming,
 .dashboard-col-growth {
     min-width: 0;
+    width: 100%;
 }
 
 .dashboard-col-upcoming .section-header,

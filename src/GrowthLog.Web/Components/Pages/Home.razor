@@ -48,6 +48,29 @@ else
         </div>
     </div>
 
+    <div class="section-header">
+        <div class="dashboard-col-growth">
+            <div class="section-header">
+                <h2>Family growth</h2>
+                <a class="btn btn-sm btn-outline-secondary" href="compare">Open full compare</a>
+            </div>
+            @if (_snapshotSeries.Count == 0)
+            {
+                <EmptyState Icon="📈"
+                            Title="No growth data to show yet."
+                            Description="Add a measurement to see your family's growth over time." />
+            }
+            else
+            {
+                <LineChart Series="_snapshotSeries"
+                           XAxisMode="Age"
+                           YUnit="cm"
+                           UnitSystem="_unitSystem"
+                           Class="chart-card" />
+            }
+        </div>
+    </div>
+
     <div class="dashboard-two-col">
         <div class="dashboard-col-upcoming">
             <div class="section-header">
@@ -85,83 +108,63 @@ else
             }
         </div>
 
-        <div class="dashboard-col-growth">
-            <div class="section-header">
-                <h2>Family growth</h2>
-                <a class="btn btn-sm btn-outline-secondary" href="compare">Open full compare</a>
-            </div>
-            @if (_snapshotSeries.Count == 0)
+        <div>
+            <h2>Recent activity</h2>
+            @if (_recent.Count > 0)
             {
-                <EmptyState Icon="📈"
-                            Title="No growth data to show yet."
-                            Description="Add a measurement to see your family's growth over time." />
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _showAllRecent = !_showAllRecent">
+                    @(_showAllRecent ? "Show less" : "View all")
+                </button>
+            }
+
+            @if (_recent.Count == 0)
+            {
+                <EmptyState Icon="📏"
+                            Title="No measurements yet."
+                            Description="Add the first height or weight measurement to start a growth history."
+                            ActionText="+ Add measurement"
+                            OnAction="OpenAddFromDashboard" />
+            }
+            else if (!_showAllRecent)
+            {
+                <ul class="activity-feed">
+                    @foreach (var r in _recent.Take(5))
+                    {
+                        <li class="activity-item">
+                            <div class="activity-main">
+                                <a href="people/@r.PersonId">@r.PersonName</a>
+                                <span class="activity-values">
+                                    @UnitConverter.FormatHeight(r.HeightCm, _unitSystem)
+                                    <span class="dot">·</span>
+                                    @UnitConverter.FormatWeight(r.WeightKg, _unitSystem)
+                                </span>
+                            </div>
+                            <div class="activity-when">@RelativeTime(r.MeasurementDate)</div>
+                        </li>
+                    }
+                </ul>
             }
             else
             {
-                <LineChart Series="_snapshotSeries"
-                           XAxisMode="Age"
-                           YUnit="cm"
-                           UnitSystem="_unitSystem"
-                           Class="chart-card" />
+                <table class="table">
+                    <thead>
+                        <tr><th>Date</th><th>Person</th><th>Height</th><th>Weight</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _recent)
+                        {
+                            <tr>
+                                <td>@r.MeasurementDate</td>
+                                <td><a href="people/@r.PersonId">@r.PersonName</a></td>
+                                <td>@UnitConverter.FormatHeight(r.HeightCm, _unitSystem)</td>
+                                <td>@UnitConverter.FormatWeight(r.WeightKg, _unitSystem)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             }
         </div>
     </div>
-
-    <div class="section-header">
-        <h2>Recent activity</h2>
-        @if (_recent.Count > 0)
-        {
-            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _showAllRecent = !_showAllRecent">
-                @(_showAllRecent ? "Show less" : "View all")
-            </button>
-        }
-    </div>
-    @if (_recent.Count == 0)
-    {
-        <EmptyState Icon="📏"
-                    Title="No measurements yet."
-                    Description="Add the first height or weight measurement to start a growth history."
-                    ActionText="+ Add measurement"
-                    OnAction="OpenAddFromDashboard" />
-    }
-    else if (!_showAllRecent)
-    {
-        <ul class="activity-feed">
-            @foreach (var r in _recent.Take(5))
-            {
-                <li class="activity-item">
-                    <div class="activity-main">
-                        <a href="people/@r.PersonId">@r.PersonName</a>
-                        <span class="activity-values">
-                            @UnitConverter.FormatHeight(r.HeightCm, _unitSystem)
-                            <span class="dot">·</span>
-                            @UnitConverter.FormatWeight(r.WeightKg, _unitSystem)
-                        </span>
-                    </div>
-                    <div class="activity-when">@RelativeTime(r.MeasurementDate)</div>
-                </li>
-            }
-        </ul>
-    }
-    else
-    {
-        <table class="table">
-            <thead>
-                <tr><th>Date</th><th>Person</th><th>Height</th><th>Weight</th></tr>
-            </thead>
-            <tbody>
-                @foreach (var r in _recent)
-                {
-                    <tr>
-                        <td>@r.MeasurementDate</td>
-                        <td><a href="people/@r.PersonId">@r.PersonName</a></td>
-                        <td>@UnitConverter.FormatHeight(r.HeightCm, _unitSystem)</td>
-                        <td>@UnitConverter.FormatWeight(r.WeightKg, _unitSystem)</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
 
     <h2>My families</h2>
     @if (_ownFamilies.Count == 0)
