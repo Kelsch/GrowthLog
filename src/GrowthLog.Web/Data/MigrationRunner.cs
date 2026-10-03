@@ -102,6 +102,5 @@ public sealed class MigrationRunner
         }
 
         return false;
-        }
     }
 }
