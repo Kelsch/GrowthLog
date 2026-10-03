@@ -65,12 +65,43 @@ public sealed class MigrationRunner
             var sql = await File.ReadAllTextAsync(file);
 
             using var tx = connection.BeginTransaction();
-            await connection.ExecuteAsync(sql, transaction: tx);
+            try
+            {
+                await connection.ExecuteAsync(sql, transaction: tx);
+            }
+            catch (Exception ex) when (IsAlreadyApplied(ex))
+            {
+                // The schema change this migration makes already exists (for
+                // example EF Core Identity created the column first). Treat it
+                // as applied instead of crashing startup.
+                _logger.LogWarning(
+                    ex,
+                    "Migration {Version} appears to be already applied; recording it as applied.",
+                    version);
+            }
+
             await connection.ExecuteAsync(
                 "INSERT INTO SchemaVersions (Version, AppliedUtc) VALUES (@Version, @AppliedUtc)",
                 new { Version = version, AppliedUtc = DateTime.UtcNow.ToString("o") },
                 transaction: tx);
             tx.Commit();
+        }
+    }
+
+    private static bool IsAlreadyApplied(Exception ex)
+    {
+        // SQLite reports "duplicate column name: X" when an ADD COLUMN is
+        // re-run. Match on the message so we do not depend on a specific
+        // provider exception type.
+        for (var current = ex; current is not null; current = current.InnerException)
+        {
+            if (current.Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
         }
     }
 }
