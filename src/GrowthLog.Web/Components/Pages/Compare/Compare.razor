@@ -26,9 +26,9 @@ else
                 Same age
             </button>
             <button type="button"
-                    class="filter-chip @(_mode == CompareModes.Trajectories ? "active" : "")"
-                    @onclick='() => SetMode(CompareModes.Trajectories)'>
-                Growth trajectories
+                    class="filter-chip @(_mode == CompareModes.OverTime ? "active" : "")"
+                    @onclick='() => SetMode(CompareModes.OverTime)'>
+                Over time
             </button>
         </div>
 
@@ -42,7 +42,7 @@ else
                 }
             </select>
 
-            @if (_mode == CompareModes.Trajectories)
+            @if (_mode == CompareModes.OverTime)
             {
                 <label class="compare-inline-label" for="compare-xaxis">X axis</label>
                 <select id="compare-xaxis" class="form-select form-select-sm compare-inline-select"
@@ -162,7 +162,7 @@ else
     else
     {
         <h2 class="compare-chart-title">@_metric over @(_xAxis == ChartXAxisModes.Age ? "age" : "date")</h2>
-        @if (_series.Count > MaxTrajectoryPeople)
+        @if (_series.Count > MaxOverTimePeople)
         {
             <p class="text-muted">
                 Showing @_series.Count people. Click a name in the legend to focus one person,
@@ -257,11 +257,11 @@ else
     private static class CompareModes
     {
         public const string SameAge = "SameAge";
-        public const string Trajectories = "Trajectories";
+        public const string OverTime = "OverTime";
     }
 
     private const double AgeToleranceYears = 0.5; // ±6 months
-    private const int MaxTrajectoryPeople = 5;
+    private const int MaxOverTimePeople = 5;
 
     private bool _loading = true;
     private string _mode = CompareModes.SameAge;
@@ -329,9 +329,9 @@ else
             .ThenBy(p => p.LastName)
             .ToList();
 
-        // Default to a readable number of people for the trajectory chart.
+        // Default to a readable number of people for the over-time chart.
         // Users can still check more; this just avoids an unreadable default.
-        foreach (var p in _people.Take(MaxTrajectoryPeople)) _selectedPersonIds.Add(p.Id);
+        foreach (var p in _people.Take(MaxOverTimePeople)) _selectedPersonIds.Add(p.Id);
 
         await LoadAsync();
         _loading = false;
@@ -457,7 +457,7 @@ else
         {
             var people = _selectedPersonIds.Count;
             var metric = _metric;
-            var axis = _mode == CompareModes.Trajectories
+            var axis = _mode == CompareModes.OverTime
                 ? (_xAxis == ChartXAxisModes.Age ? "Age" : "Date")
                 : $"Age {_selectedAge:0.#}";
             return $"{people} {(people == 1 ? "person" : "people")} · {metric} · {axis}";
@@ -523,10 +523,12 @@ else
         return Math.Max(2, value / max * 100);
     }
 
+    // Same palette as LineChart so same-age bars and the over-time chart
+    // use identical colors for the same person.
     private static readonly string[] Palette =
     {
-        "#2563eb", "#dc2626", "#16a34a", "#d97706", "#7c3aed",
-        "#0891b2", "#db2777", "#65a30d", "#ea580c", "#4f46e5"
+        "#1d4ed8", "#dc2626", "#15803d", "#b45309", "#7e22ce",
+        "#0e7490", "#be185d", "#4d7c0f", "#c2410c", "#4338ca"
     };
 
     private static string ColorFor(string personId)
@@ -610,6 +612,13 @@ else
 
     .compare-chart-area {
         margin-bottom: 1rem;
+    }
+
+    /* The chart card must render identically to the Dashboard snapshot.
+       Do not add Compare-only overrides that lighten strokes, reduce
+       opacity, or shrink markers. */
+    .compare-chart-area .chart-card {
+        padding: 1rem 1rem 0.75rem;
     }
 
     .compare-chart-title {

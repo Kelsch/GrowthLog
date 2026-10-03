@@ -1044,6 +1044,13 @@ main {
     gap: 0.35rem;
 }
 
+/* The Compare chart must be visually identical to the Dashboard snapshot.
+   Both render the same LineChart component with Class="chart-card", so no
+   Compare-specific stroke/marker/opacity overrides are allowed here. */
+.compare-chart-area .chart-card {
+    padding: 1rem 1rem 0.75rem;
+}
+
 .same-age-controls-row {
     display: flex;
     align-items: center;
