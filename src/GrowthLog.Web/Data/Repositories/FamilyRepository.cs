@@ -77,4 +77,16 @@ public class FamilyRepository
             "UPDATE Families SET IsDeleted = 1 WHERE Id = @Id",
             new { Id = familyId });
     }
+
+    /// <summary>
+    /// Sets (or clears, when <paramref name="familyId"/> is null) the user's
+    /// starred/default family. Stored on AspNetUsers.DefaultFamilyId.
+    /// </summary>
+    public async Task SetDefaultFamilyAsync(string userId, string? familyId)
+    {
+        using var connection = _factory.Create();
+        await connection.ExecuteAsync(
+            "UPDATE AspNetUsers SET DefaultFamilyId = @FamilyId WHERE Id = @UserId",
+            new { UserId = userId, FamilyId = familyId });
+    }
 }

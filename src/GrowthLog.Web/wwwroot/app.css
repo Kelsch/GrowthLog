@@ -1032,7 +1032,7 @@ main {
 .vbar-plot {
     display: flex;
     align-items: flex-end;
-    gap: 0.75rem;
+    gap: clamp(0.4rem, 1.5vw, 1.25rem);
     min-height: 260px;
     padding: 0.5rem 0.25rem 0;
     border-bottom: 2px solid #94a3b8;
@@ -1044,7 +1044,7 @@ main {
     align-items: center;
     justify-content: flex-end;
     flex: 1 1 0;
-    min-width: 3.5rem;
+    min-width: 3rem;
     height: 260px;
 }
 
@@ -1071,6 +1071,28 @@ main {
     width: 100%;
     border-radius: 0.375rem 0.375rem 0 0;
     transition: height 0.2s ease;
+}
+
+/* Grouped (height + weight) bars share the track side by side. */
+.vbar-track-grouped {
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 2px;
+    background: transparent;
+    overflow: visible;
+}
+
+.vbar-track-grouped .vbar-bar {
+    flex: 1 1 0;
+    width: auto;
+}
+
+.vbar-bar-height {
+    background: #1d4ed8;
+}
+
+.vbar-bar-weight {
+    background: #dc2626;
 }
 
 .vbar-name {
@@ -1104,6 +1126,38 @@ main {
     flex-wrap: wrap;
     gap: 0.35rem;
     margin-bottom: 0.75rem;
+}
+
+.family-chip-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+}
+
+.family-star {
+    background: none;
+    border: none;
+    padding: 0 0.25rem;
+    font-size: 1rem;
+    line-height: 1;
+    color: #94a3b8;
+    cursor: pointer;
+}
+
+.family-star.active {
+    color: #f59e0b;
+}
+```
+
+Now the responsive width fix. The `.content` max-width is 1100px — widen it on large screens.
+
+src\GrowthLog.Web\wwwroot\app.css
+```css
+<<<<<<< SEARCH
+.content {
+    padding: 1.5rem;
+    max-width: 1100px;
+    width: 100%;
 }
 
 /* GrowthLog chart toolbar */

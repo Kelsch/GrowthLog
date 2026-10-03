@@ -4,6 +4,7 @@
 
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthState
+@inject FamilyRepository Families
 
 <PageTitle>Settings — GrowthLog</PageTitle>
 
@@ -33,6 +34,17 @@ else
                 <option value="Metric">Metric (cm, kg)</option>
             </InputSelect>
         </div>
+        <div class="mb-3">
+            <label class="form-label">Default family</label>
+            <InputSelect @bind-Value="_model.DefaultFamilyId" class="form-select">
+                <option value="">(None — use first family)</option>
+                @foreach (var f in _families)
+                {
+                    <option value="@f.Id">@f.Name</option>
+                }
+            </InputSelect>
+            <p class="text-muted">Shown first on the Dashboard chart.</p>
+        </div>
         <button type="submit" class="btn btn-primary">Save</button>
     </EditForm>
 
@@ -52,6 +64,7 @@ else
     private ApplicationUser? _user;
     private readonly SettingsModel _model = new();
     private string? _message;
+    private List<Family> _families = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -62,9 +75,12 @@ else
         _user = await UserManager.FindByIdAsync(userId);
         if (_user is null) return;
 
+        _families = (await Families.GetForUserAsync(userId)).ToList();
+
         _model.DisplayName = _user.DisplayName;
         _model.Email = _user.Email ?? string.Empty;
         _model.PreferredUnitSystem = _user.PreferredUnitSystem;
+        _model.DefaultFamilyId = _user.DefaultFamilyId ?? string.Empty;
     }
 
     private async Task Save()
@@ -75,6 +91,9 @@ else
         _user.Email = _model.Email;
         _user.UserName = _model.Email;
         _user.PreferredUnitSystem = _model.PreferredUnitSystem;
+        _user.DefaultFamilyId = string.IsNullOrWhiteSpace(_model.DefaultFamilyId)
+            ? null
+            : _model.DefaultFamilyId;
 
         var result = await UserManager.UpdateAsync(_user);
         _message = result.Succeeded
@@ -92,5 +111,7 @@ else
         public string Email { get; set; } = string.Empty;
 
         public string PreferredUnitSystem { get; set; } = "Imperial";
+
+        public string DefaultFamilyId { get; set; } = string.Empty;
     }
 }

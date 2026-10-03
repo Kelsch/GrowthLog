@@ -59,11 +59,20 @@ else
             <div class="chart-family-chips">
                 @foreach (var f in _ownFamilies)
                 {
-                    <button type="button"
-                            class="filter-chip @(_selectedFamilyId == f.Id ? "active" : "")"
-                            @onclick="() => SelectFamily(f.Id)">
-                        @f.Name
-                    </button>
+                    <span class="family-chip-wrap">
+                        <button type="button"
+                                class="filter-chip @(_selectedFamilyId == f.Id ? "active" : "")"
+                                @onclick="() => SelectFamily(f.Id)">
+                            @f.Name
+                        </button>
+                        <button type="button"
+                                class="family-star @(_defaultFamilyId == f.Id ? "active" : "")"
+                                title="@(_defaultFamilyId == f.Id ? "Clear default family" : "Set as default family")"
+                                aria-label="@(_defaultFamilyId == f.Id ? "Clear default family" : "Set as default family")"
+                                @onclick="() => ToggleDefaultFamily(f.Id)">
+                            @(_defaultFamilyId == f.Id ? "★" : "☆")
+                        </button>
+                    </span>
                 }
             </div>
         }
@@ -79,6 +88,11 @@ else
                         class="filter-chip @(_chartMetric == ChartMetrics.Weight ? "active" : "")"
                         @onclick='() => SetMetric(ChartMetrics.Weight)'>
                     Weight
+                </button>
+                <button type="button"
+                        class="filter-chip @(_chartMetric == MetricModes.Both ? "active" : "")"
+                        @onclick='() => SetMetric(MetricModes.Both)'>
+                    Both
                 </button>
             </div>
 
@@ -125,14 +139,29 @@ else
                     <div class="vbar-plot">
                         @foreach (var row in _barRows)
                         {
-                            <div class="vbar-col">
-                                <div class="vbar-value">@FormatValue(row.Value!.Value)</div>
-                                <div class="vbar-track">
-                                    <div class="vbar-bar"
-                                         style="height:@(BarHeightPercent(row.Value!.Value).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;background:@ColorFor(row.PersonId)">
+                            <div class="vbar-col" title="@TooltipFor(row)">
+                                @if (_chartMetric == MetricModes.Both)
+                                {
+                                    <div class="vbar-value">@FormatValue(row.HeightValue!.Value) / @FormatValue(row.WeightValue!.Value)</div>
+                                    <div class="vbar-track vbar-track-grouped">
+                                        <div class="vbar-bar vbar-bar-height"
+                                             style="height:@(BarHeightPercent(row.HeightValue!.Value, _barMaxHeight).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%">
+                                        </div>
+                                        <div class="vbar-bar vbar-bar-weight"
+                                             style="height:@(BarHeightPercent(row.WeightValue!.Value, _barMaxWeight).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%">
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="vbar-name" title="@row.PersonName">@row.PersonName</div>
+                                }
+                                else
+                                {
+                                    <div class="vbar-value">@FormatValue(row.Value!.Value)</div>
+                                    <div class="vbar-track">
+                                        <div class="vbar-bar"
+                                             style="height:@(BarHeightPercent(row.Value!.Value, _barMaxValue).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;background:@ColorFor(row.PersonId)">
+                                        </div>
+                                    </div>
+                                }
+                                <div class="vbar-name" title="@row.PersonName">@row.FirstName</div>
                             </div>
                         }
                     </div>
@@ -334,14 +363,22 @@ else
         public const string OverTime = "OverTime";
     }
 
+    private static class MetricModes
+    {
+        public const string Both = "Both";
+    }
+
     private string _chartTab = ChartTabs.ByAge;
     private string _chartMetric = ChartMetrics.Height;
     private string? _selectedFamilyId;
+    private string? _defaultFamilyId;
     private string? _highlightedPersonId;
     private double _selectedAge = 10;
     private List<BarRow> _barRows = new();
     private List<BarRow> _missingBarRows = new();
     private double _barMaxValue = 1;
+    private double _barMaxHeight = 1;
+    private double _barMaxWeight = 1;
 
     private string Greeting
     {
@@ -422,6 +459,7 @@ else
         var user = await UserManager.FindByIdAsync(_userId);
         _unitSystem = user?.PreferredUnitSystem ?? "Imperial";
         _displayName = ResolveDisplayName(user);
+        _defaultFamilyId = user?.DefaultFamilyId;
 
         await LoadAsync();
         _loading = false;
@@ -518,11 +556,13 @@ else
             .ThenBy(u => u.PersonName)
             .ToList();
 
-        // Default to one primary family so the chart isn't a random mix of
-        // people across families. Fall back to the first visible family.
+        // Default to the starred family when set; otherwise the first family.
         if (_selectedFamilyId is null || _ownFamilies.All(f => f.Id != _selectedFamilyId))
         {
-            _selectedFamilyId = _ownFamilies.FirstOrDefault()?.Id;
+            _selectedFamilyId = _defaultFamilyId is not null
+                                && _ownFamilies.Any(f => f.Id == _defaultFamilyId)
+                ? _defaultFamilyId
+                : _ownFamilies.FirstOrDefault()?.Id;
         }
 
         await LoadChartAsync();
@@ -542,38 +582,70 @@ else
 
         var personIds = familyPeople.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
 
-        // Line chart (over time) — authorization enforced inside ChartDataService.
+        // The line chart shows a single metric; "Both" falls back to Height.
+        var lineMetric = _chartMetric == MetricModes.Both ? ChartMetrics.Height : _chartMetric;
+
         _snapshotSeries = personIds.Count == 0
             ? new List<GrowthLog.Web.Data.Charts.ChartSeries>()
-            : await Charts.GetSeriesAsync(_userId, _chartMetric, personIds);
+            : await Charts.GetSeriesAsync(_userId, lineMetric, personIds);
 
         // Bar chart (by age) — nearest actual measurement within tolerance.
-        var seriesById = _snapshotSeries.ToDictionary(s => s.PersonId, StringComparer.Ordinal);
+        // For "Both" we need height and weight series separately.
+        IReadOnlyList<GrowthLog.Web.Data.Charts.ChartSeries> heightSeries = _snapshotSeries;
+        IReadOnlyList<GrowthLog.Web.Data.Charts.ChartSeries> weightSeries = _snapshotSeries;
+
+        if (_chartMetric == MetricModes.Both && personIds.Count > 0)
+        {
+            heightSeries = await Charts.GetSeriesAsync(_userId, ChartMetrics.Height, personIds);
+            weightSeries = await Charts.GetSeriesAsync(_userId, ChartMetrics.Weight, personIds);
+        }
+
+        var heightById = heightSeries.ToDictionary(s => s.PersonId, StringComparer.Ordinal);
+        var weightById = weightSeries.ToDictionary(s => s.PersonId, StringComparer.Ordinal);
+
         var rows = new List<BarRow>();
         foreach (var p in familyPeople)
         {
-            double? value = null;
-            if (seriesById.TryGetValue(p.Id, out var s))
-            {
-                var nearest = s.Points
-                    .Where(pt => Math.Abs(pt.AgeYears - _selectedAge) <= AgeToleranceYears)
-                    .OrderBy(pt => Math.Abs(pt.AgeYears - _selectedAge))
-                    .FirstOrDefault();
-                value = nearest?.Y;
-            }
+            double? height = NearestValue(heightById, p.Id, _selectedAge);
+            double? weight = NearestValue(weightById, p.Id, _selectedAge);
 
             rows.Add(new BarRow
             {
                 PersonId = p.Id,
                 PersonName = p.FullName,
-                Value = value
+                FirstName = p.FirstName,
+                Value = _chartMetric == ChartMetrics.Weight ? weight : height,
+                HeightValue = height,
+                WeightValue = weight
             });
         }
 
         // Keep oldest -> youngest (familyPeople is already DOB-ordered).
-        _barRows = rows.Where(r => r.Value is not null).ToList();
-        _missingBarRows = rows.Where(r => r.Value is null).ToList();
-        _barMaxValue = _barRows.Select(r => r.Value!.Value).DefaultIfEmpty(1).Max();
+        if (_chartMetric == MetricModes.Both)
+        {
+            _barRows = rows.Where(r => r.HeightValue is not null || r.WeightValue is not null).ToList();
+            _missingBarRows = rows.Where(r => r.HeightValue is null && r.WeightValue is null).ToList();
+            _barMaxHeight = _barRows.Select(r => r.HeightValue ?? 0).DefaultIfEmpty(1).Max();
+            _barMaxWeight = _barRows.Select(r => r.WeightValue ?? 0).DefaultIfEmpty(1).Max();
+        }
+        else
+        {
+            _barRows = rows.Where(r => r.Value is not null).ToList();
+            _missingBarRows = rows.Where(r => r.Value is null).ToList();
+            _barMaxValue = _barRows.Select(r => r.Value!.Value).DefaultIfEmpty(1).Max();
+        }
+    }
+
+    private static double? NearestValue(
+        IReadOnlyDictionary<string, GrowthLog.Web.Data.Charts.ChartSeries> byId,
+        string personId,
+        double age)
+    {
+        if (!byId.TryGetValue(personId, out var s)) return null;
+        return s.Points
+            .Where(pt => Math.Abs(pt.AgeYears - age) <= AgeToleranceYears)
+            .OrderBy(pt => Math.Abs(pt.AgeYears - age))
+            .FirstOrDefault()?.Y;
     }
 
     private static DateOnly ParseDob(string dob)
@@ -622,6 +694,14 @@ else
         _selectedFamilyId = familyId;
         _highlightedPersonId = null;
         await LoadChartAsync();
+    }
+
+    private async Task ToggleDefaultFamily(string familyId)
+    {
+        if (_userId is null) return;
+
+        _defaultFamilyId = _defaultFamilyId == familyId ? null : familyId;
+        await Families.SetDefaultFamilyAsync(_userId, _defaultFamilyId);
     }
 
     private async Task SetMetric(string metric)
@@ -677,10 +757,32 @@ else
             ? UnitConverter.FormatWeight(v, _unitSystem)
             : UnitConverter.FormatHeight(v, _unitSystem);
 
-    private double BarHeightPercent(double value)
+    private string TooltipFor(BarRow row)
     {
-        if (_barMaxValue <= 0) return 0;
-        return Math.Max(2, value / _barMaxValue * 100);
+        var age = _selectedAge.ToString("0.#");
+        var lines = new List<string> { row.PersonName, $"Age {age}" };
+
+        if (_chartMetric == MetricModes.Both)
+        {
+            if (row.HeightValue is not null)
+                lines.Add($"Height: {UnitConverter.FormatHeight(row.HeightValue, _unitSystem)}");
+            if (row.WeightValue is not null)
+                lines.Add($"Weight: {UnitConverter.FormatWeight(row.WeightValue, _unitSystem)}");
+        }
+        else if (row.Value is not null)
+        {
+            lines.Add(_chartMetric == ChartMetrics.Weight
+                ? $"Weight: {UnitConverter.FormatWeight(row.Value, _unitSystem)}"
+                : $"Height: {UnitConverter.FormatHeight(row.Value, _unitSystem)}");
+        }
+
+        return string.Join("\n", lines);
+    }
+
+    private static double BarHeightPercent(double value, double max)
+    {
+        if (max <= 0) return 0;
+        return Math.Max(2, value / max * 100);
     }
 
     private static readonly string[] Palette =
@@ -700,7 +802,10 @@ else
     {
         public string PersonId { get; set; } = string.Empty;
         public string PersonName { get; set; } = string.Empty;
+        public string FirstName { get; set; } = string.Empty;
         public double? Value { get; set; }
+        public double? HeightValue { get; set; }
+        public double? WeightValue { get; set; }
     }
 
     private class UpcomingRow
