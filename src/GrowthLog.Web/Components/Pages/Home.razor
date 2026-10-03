@@ -121,22 +121,21 @@ else
             }
             else
             {
-                <div class="same-age-plot">
-                    @{ var rank = 0; }
-                    @foreach (var row in _barRows)
-                    {
-                        rank++;
-                        <div class="same-age-row">
-                            <div class="same-age-rank">@rank</div>
-                            <div class="same-age-name">@row.PersonName</div>
-                            <div class="same-age-bar-track">
-                                <div class="same-age-bar"
-                                     style="width:@(BarWidthPercent(row.Value!.Value).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;background:@ColorFor(row.PersonId)">
+                <div class="vbar-chart">
+                    <div class="vbar-plot">
+                        @foreach (var row in _barRows)
+                        {
+                            <div class="vbar-col">
+                                <div class="vbar-value">@FormatValue(row.Value!.Value)</div>
+                                <div class="vbar-track">
+                                    <div class="vbar-bar"
+                                         style="height:@(BarHeightPercent(row.Value!.Value).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;background:@ColorFor(row.PersonId)">
+                                    </div>
                                 </div>
+                                <div class="vbar-name" title="@row.PersonName">@row.PersonName</div>
                             </div>
-                            <div class="same-age-value">@FormatValue(row.Value!.Value)</div>
-                        </div>
-                    }
+                        }
+                    </div>
                 </div>
 
                 @if (_missingBarRows.Count > 0)
@@ -571,9 +570,8 @@ else
             });
         }
 
-        _barRows = rows.Where(r => r.Value is not null)
-            .OrderByDescending(r => r.Value!.Value)
-            .ToList();
+        // Keep oldest -> youngest (familyPeople is already DOB-ordered).
+        _barRows = rows.Where(r => r.Value is not null).ToList();
         _missingBarRows = rows.Where(r => r.Value is null).ToList();
         _barMaxValue = _barRows.Select(r => r.Value!.Value).DefaultIfEmpty(1).Max();
     }
@@ -679,7 +677,7 @@ else
             ? UnitConverter.FormatWeight(v, _unitSystem)
             : UnitConverter.FormatHeight(v, _unitSystem);
 
-    private double BarWidthPercent(double value)
+    private double BarHeightPercent(double value)
     {
         if (_barMaxValue <= 0) return 0;
         return Math.Max(2, value / _barMaxValue * 100);

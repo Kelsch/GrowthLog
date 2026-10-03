@@ -1023,6 +1023,81 @@ main {
     flex-shrink: 0;
 }
 
+/* GrowthLog vertical bar chart (Dashboard "By age" + Compare "Same age") */
+.vbar-chart {
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+}
+
+.vbar-plot {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    min-height: 260px;
+    padding: 0.5rem 0.25rem 0;
+    border-bottom: 2px solid #94a3b8;
+}
+
+.vbar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 1 1 0;
+    min-width: 3.5rem;
+    height: 260px;
+}
+
+.vbar-value {
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    margin-bottom: 0.25rem;
+}
+
+.vbar-track {
+    display: flex;
+    align-items: flex-end;
+    width: 100%;
+    max-width: 3.5rem;
+    flex: 1;
+    background: #f1f3f5;
+    border-radius: 0.375rem 0.375rem 0 0;
+    overflow: hidden;
+}
+
+.vbar-bar {
+    width: 100%;
+    border-radius: 0.375rem 0.375rem 0 0;
+    transition: height 0.2s ease;
+}
+
+.vbar-name {
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-top: 0.4rem;
+    max-width: 6rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+}
+
+@media (max-width: 768px) {
+    .vbar-plot {
+        gap: 0.4rem;
+    }
+
+    .vbar-col {
+        min-width: 2.75rem;
+    }
+
+    .vbar-name {
+        max-width: 4rem;
+    }
+}
+
 /* GrowthLog dashboard chart family chips */
 .chart-family-chips {
     display: flex;

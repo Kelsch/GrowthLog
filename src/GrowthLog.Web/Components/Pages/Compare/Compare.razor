@@ -126,22 +126,21 @@ else
         {
             @if (_rankedSameAgeRows.Count > 0)
             {
-                <div class="same-age-plot">
-                    @{ var rank = 0; }
-                    @foreach (var row in _rankedSameAgeRows)
-                    {
-                        rank++;
-                        <div class="same-age-row">
-                            <div class="same-age-rank">@rank</div>
-                            <div class="same-age-name">@row.PersonName</div>
-                            <div class="same-age-bar-track">
-                                <div class="same-age-bar"
-                                     style="width:@(BarWidthPercent(row.Value!.Value).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;background:@ColorFor(row.PersonId)">
+                <div class="vbar-chart">
+                    <div class="vbar-plot">
+                        @foreach (var row in _rankedSameAgeRows)
+                        {
+                            <div class="vbar-col">
+                                <div class="vbar-value">@FormatValue(row.Value!.Value)</div>
+                                <div class="vbar-track">
+                                    <div class="vbar-bar"
+                                         style="height:@(BarHeightPercent(row.Value!.Value).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;background:@ColorFor(row.PersonId)">
+                                    </div>
                                 </div>
+                                <div class="vbar-name" title="@row.PersonName">@row.PersonName</div>
                             </div>
-                            <div class="same-age-value">@FormatValue(row.Value!.Value)</div>
-                        </div>
-                    }
+                        }
+                    </div>
                 </div>
             }
 
@@ -508,7 +507,10 @@ else
                     Value = nearest?.Y
                 });
             }
-            return rows.OrderByDescending(r => r.Value ?? double.MinValue).ToList();
+            // Oldest -> youngest left to right. _series is already ordered by
+            // the visible-people query; keep that order and only drop the
+            // value-based ranking.
+            return rows;
         }
     }
 
@@ -521,7 +523,7 @@ else
     private double _sameAgeMaxValue
         => _rankedSameAgeRows.Select(r => r.Value!.Value).DefaultIfEmpty(1).Max();
 
-    private double BarWidthPercent(double value)
+    private double BarHeightPercent(double value)
     {
         var max = _sameAgeMaxValue;
         if (max <= 0) return 0;
