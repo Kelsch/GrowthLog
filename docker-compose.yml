@@ -1,6 +1,6 @@
 services:
   growthlog:
-    image: ghcr.io/Kelsch/growthlog:latest
+    image: ghcr.io/kelsch/growthlog:latest
     # To build locally instead of pulling, comment out `image:` above and
     # uncomment the build block below.
     # build:
