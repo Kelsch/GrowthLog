@@ -90,7 +90,12 @@ else
                                          style="height:@(BarHeightPercent(row.HeightValue ?? 0, _barMaxHeight).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;background:@ColorFor(row.PersonId)">
                                     </div>
                                 </div>
-                                <div class="both-chart-name" title="@row.PersonName">@row.FirstName</div>
+                                <button type="button"
+                                        class="both-chart-name chart-name-toggle"
+                                        title="@($"{row.PersonName} — click to hide")"
+                                        @onclick="() => TogglePerson(row.PersonId)">
+                                    @row.FirstName
+                                </button>
                             </div>
                         }
                     </div>
@@ -131,7 +136,12 @@ else
                                          style="height:@(BarHeightPercent(row.Value!.Value, _barMaxValue).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;background:@ColorFor(row.PersonId)">
                                     </div>
                                 </div>
-                                <div class="vbar-name" title="@row.PersonName">@row.FirstName</div>
+                                <button type="button"
+                                        class="vbar-name chart-name-toggle"
+                                        title="@($"{row.PersonName} — click to hide")"
+                                        @onclick="() => TogglePerson(row.PersonId)">
+                                    @row.FirstName
+                                </button>
                             </div>
                         }
                     </div>
@@ -150,6 +160,23 @@ else
                     </ul>
                 </div>
             }
+        }
+
+        @if (_legendPeople.Count > 0)
+        {
+            <div class="chart-legend">
+                @foreach (var p in _legendPeople)
+                {
+                    var hidden = _hiddenPersonIds.Contains(p.Id);
+                    <button type="button"
+                            class="legend-item @(hidden ? "legend-item-muted" : "")"
+                            title="@(hidden ? $"Show {p.FullName}" : $"Hide {p.FullName}")"
+                            @onclick="() => TogglePerson(p.Id)">
+                        <span class="legend-swatch" style="background:@ColorFor(p.Id)"></span>
+                        @p.FirstName
+                    </button>
+                }
+            </div>
         }
     </div>
 
@@ -439,6 +466,20 @@ else
 
     private string MetricTitle
         => _metric == MetricModes.Both ? "Height & weight" : _metric;
+
+    /// <summary>
+    /// People in the currently selected families, ordered oldest -> youngest.
+    /// Includes hidden people so the legend can show them as muted and let the
+    /// user turn them back on.
+    /// </summary>
+    private List<Person> _legendPeople
+        => _personFamilies
+            .Where(kv => kv.Value.Any(f => _selectedFamilyIds.Contains(f)))
+            .Select(kv => _peopleById.GetValueOrDefault(kv.Key))
+            .Where(p => p is not null)
+            .Select(p => p!)
+            .OrderBy(p => ParseDob(p.DateOfBirth))
+            .ToList();
 
     private string FormatValue(double v)
         => _metric == ChartMetrics.Weight

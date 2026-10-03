@@ -1166,6 +1166,22 @@ main {
     overflow: visible;
 }
 
+/* Clickable person name labels on the chart x-axis. */
+.chart-name-toggle {
+    background: none;
+    border: none;
+    padding: 0.1rem 0.25rem;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.chart-name-toggle:hover {
+    background: #f1f5f9;
+    text-decoration: underline;
+}
+
 /* Weight value labels, positioned in the overlay's pixel space. */
 .both-chart-weight-label {
     position: absolute;
