@@ -34,6 +34,11 @@ else
             </div>
         </div>
         <div class="family-header-actions">
+            <button class="btn btn-sm btn-outline-secondary"
+                    title="@(_isDefaultFamily ? "Clear default family" : "Set as default family")"
+                    @onclick="ToggleDefaultFamily">
+                @(_isDefaultFamily ? "★ Default" : "☆ Set as default")
+            </button>
             @if (_canAdminister)
             {
                 <button class="btn btn-sm btn-outline-secondary" @onclick="() => _renaming = !_renaming">
@@ -210,6 +215,7 @@ else
     private bool _canView;
     private bool _canMutate;
     private bool _canAdminister;
+    private bool _isDefaultFamily;
     private string? _userId;
     private string _unitSystem = "Imperial";
     private bool _renaming;
@@ -263,6 +269,7 @@ else
 
         var user = await UserManager.FindByIdAsync(_userId);
         _unitSystem = user?.PreferredUnitSystem ?? "Imperial";
+        _isDefaultFamily = user?.DefaultFamilyId == FamilyId;
 
         _family = await Families.GetByIdAsync(FamilyId);
         if (_family is null) return;
@@ -384,6 +391,14 @@ else
         await Families.RenameAsync(FamilyId, _rename.Name);
         _family = await Families.GetByIdAsync(FamilyId);
         _renaming = false;
+    }
+
+    private async Task ToggleDefaultFamily()
+    {
+        if (_userId is null) return;
+
+        _isDefaultFamily = !_isDefaultFamily;
+        await Families.SetDefaultFamilyAsync(_userId, _isDefaultFamily ? FamilyId : null);
     }
 
     private async Task RemoveMember(FamilyMembership m)

@@ -6,6 +6,7 @@
 @inject FamilyMembershipRepository Memberships
 @inject AuthenticationStateProvider AuthState
 @inject NavigationManager Nav
+@inject UserManager<ApplicationUser> UserManager
 
 <PageTitle>Families — GrowthLog</PageTitle>
 
@@ -23,12 +24,21 @@ else
 {
     <table class="table">
         <thead>
-            <tr><th>Name</th><th>Your role</th><th></th></tr>
+            <tr><th></th><th>Name</th><th>Your role</th><th></th></tr>
         </thead>
         <tbody>
             @foreach (var f in _families)
             {
                 <tr>
+                    <td>
+                        <button type="button"
+                                class="family-star @(_defaultFamilyId == f.Id ? "active" : "")"
+                                title="@(_defaultFamilyId == f.Id ? "Clear default family" : "Set as default family")"
+                                aria-label="@(_defaultFamilyId == f.Id ? "Clear default family" : "Set as default family")"
+                                @onclick="() => ToggleDefaultFamily(f.Id)">
+                            @(_defaultFamilyId == f.Id ? "★" : "☆")
+                        </button>
+                    </td>
                     <td><a href="families/@f.Id">@f.Name</a></td>
                     <td>@_roles.GetValueOrDefault(f.Id, "—")</td>
                     <td><a class="btn btn-sm btn-outline-secondary" href="families/@f.Id">Open</a></td>
@@ -36,6 +46,7 @@ else
             }
         </tbody>
     </table>
+    <p class="text-muted">The starred family is shown first on the Dashboard chart.</p>
 }
 
 <h2 class="mt-4">Create a family</h2>
@@ -53,6 +64,7 @@ else
     private readonly Dictionary<string, string> _roles = new();
     private readonly NewFamilyModel _newFamily = new();
     private string? _userId;
+    private string? _defaultFamilyId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -60,12 +72,23 @@ else
         _userId = state.User.GetUserId();
         if (_userId is null) return;
 
+        var user = await UserManager.FindByIdAsync(_userId);
+        _defaultFamilyId = user?.DefaultFamilyId;
+
         _families = (await Families.GetForUserAsync(_userId)).ToList();
         foreach (var f in _families)
         {
             var m = await Memberships.GetAsync(f.Id, _userId);
             if (m is not null) _roles[f.Id] = m.Role;
         }
+    }
+
+    private async Task ToggleDefaultFamily(string familyId)
+    {
+        if (_userId is null) return;
+
+        _defaultFamilyId = _defaultFamilyId == familyId ? null : familyId;
+        await Families.SetDefaultFamilyAsync(_userId, _defaultFamilyId);
     }
 
     private async Task CreateFamily()

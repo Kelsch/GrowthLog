@@ -59,20 +59,11 @@ else
             <div class="chart-family-chips">
                 @foreach (var f in _ownFamilies)
                 {
-                    <span class="family-chip-wrap">
-                        <button type="button"
-                                class="filter-chip @(_selectedFamilyId == f.Id ? "active" : "")"
-                                @onclick="() => SelectFamily(f.Id)">
-                            @f.Name
-                        </button>
-                        <button type="button"
-                                class="family-star @(_defaultFamilyId == f.Id ? "active" : "")"
-                                title="@(_defaultFamilyId == f.Id ? "Clear default family" : "Set as default family")"
-                                aria-label="@(_defaultFamilyId == f.Id ? "Clear default family" : "Set as default family")"
-                                @onclick="() => ToggleDefaultFamily(f.Id)">
-                            @(_defaultFamilyId == f.Id ? "★" : "☆")
-                        </button>
-                    </span>
+                    <button type="button"
+                            class="filter-chip @(_selectedFamilyId == f.Id ? "active" : "")"
+                            @onclick="() => SelectFamily(f.Id)">
+                        @f.Name
+                    </button>
                 }
             </div>
         }
@@ -135,37 +126,59 @@ else
             }
             else
             {
-                <div class="vbar-chart">
-                    <div class="vbar-plot">
-                        @foreach (var row in _barRows)
-                        {
-                            <div class="vbar-col" title="@TooltipFor(row)">
-                                @if (_chartMetric == MetricModes.Both)
-                                {
-                                    <div class="vbar-value">@FormatValue(row.HeightValue!.Value) / @FormatValue(row.WeightValue!.Value)</div>
-                                    <div class="vbar-track vbar-track-grouped">
-                                        <div class="vbar-bar vbar-bar-height"
-                                             style="height:@(BarHeightPercent(row.HeightValue!.Value, _barMaxHeight).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%">
-                                        </div>
-                                        <div class="vbar-bar vbar-bar-weight"
-                                             style="height:@(BarHeightPercent(row.WeightValue!.Value, _barMaxWeight).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%">
+                @if (_chartMetric == MetricModes.Both)
+                {
+                    <div class="both-chart">
+                        <div class="both-chart-axis-label both-chart-axis-left">Height (@(_unitSystem == "Metric" ? "cm" : "ft-in"))</div>
+                        <div class="both-chart-axis-label both-chart-axis-right">Weight (@(_unitSystem == "Metric" ? "kg" : "lb"))</div>
+                        <div class="both-chart-plot">
+                            @foreach (var row in _barRows)
+                            {
+                                <div class="both-chart-col" title="@TooltipFor(row)">
+                                    <div class="both-chart-value">@FormatValue(row.HeightValue ?? 0)</div>
+                                    <div class="both-chart-track">
+                                        <div class="both-chart-bar"
+                                             style="height:@(BarHeightPercent(row.HeightValue ?? 0, _barMaxHeight).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;background:@ColorFor(row.PersonId)">
                                         </div>
                                     </div>
-                                }
-                                else
-                                {
+                                    <div class="both-chart-name" title="@row.PersonName">@row.FirstName</div>
+                                </div>
+                            }
+                        </div>
+                        <svg class="both-chart-line" viewBox="0 0 100 100" preserveAspectRatio="none">
+                            @if (_weightLinePoints.Count > 1)
+                            {
+                                <polyline fill="none" stroke="#dc2626" stroke-width="0.6"
+                                          vector-effect="non-scaling-stroke"
+                                          points="@_weightLinePoints" />
+                            }
+                            @foreach (var pt in _weightLineDots)
+                            {
+                                <circle cx="@pt.X" cy="@pt.Y" r="0.9" fill="#dc2626"
+                                        vector-effect="non-scaling-stroke" />
+                            }
+                        </svg>
+                    </div>
+                }
+                else
+                {
+                    <div class="vbar-chart">
+                        <div class="vbar-plot">
+                            @foreach (var row in _barRows)
+                            {
+                                <div class="vbar-col" title="@TooltipFor(row)">
                                     <div class="vbar-value">@FormatValue(row.Value!.Value)</div>
                                     <div class="vbar-track">
                                         <div class="vbar-bar"
                                              style="height:@(BarHeightPercent(row.Value!.Value, _barMaxValue).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;background:@ColorFor(row.PersonId)">
                                         </div>
                                     </div>
-                                }
-                                <div class="vbar-name" title="@row.PersonName">@row.FirstName</div>
-                            </div>
-                        }
+                                    <div class="vbar-name" title="@row.PersonName">@row.FirstName</div>
+                                </div>
+                            }
+                        </div>
                     </div>
-                </div>
+                }
 
                 @if (_missingBarRows.Count > 0)
                 {
@@ -379,6 +392,8 @@ else
     private double _barMaxValue = 1;
     private double _barMaxHeight = 1;
     private double _barMaxWeight = 1;
+    private string _weightLinePoints = string.Empty;
+    private List<(double X, double Y)> _weightLineDots = new();
 
     private string Greeting
     {
@@ -627,13 +642,49 @@ else
             _missingBarRows = rows.Where(r => r.HeightValue is null && r.WeightValue is null).ToList();
             _barMaxHeight = _barRows.Select(r => r.HeightValue ?? 0).DefaultIfEmpty(1).Max();
             _barMaxWeight = _barRows.Select(r => r.WeightValue ?? 0).DefaultIfEmpty(1).Max();
+            BuildWeightLine();
         }
         else
         {
             _barRows = rows.Where(r => r.Value is not null).ToList();
             _missingBarRows = rows.Where(r => r.Value is null).ToList();
             _barMaxValue = _barRows.Select(r => r.Value!.Value).DefaultIfEmpty(1).Max();
+            _weightLinePoints = string.Empty;
+            _weightLineDots = new();
         }
+    }
+
+    /// <summary>
+    /// Builds the weight overlay line for "Both" mode. Coordinates are in a
+    /// 0..100 viewBox: X is the column center, Y is scaled to the weight axis
+    /// (0 = top, 100 = baseline). Only actual measurements are plotted.
+    /// </summary>
+    private void BuildWeightLine()
+    {
+        _weightLineDots = new();
+        var count = _barRows.Count;
+        if (count == 0 || _barMaxWeight <= 0)
+        {
+            _weightLinePoints = string.Empty;
+            return;
+        }
+
+        var pts = new List<string>();
+        for (var i = 0; i < count; i++)
+        {
+            var row = _barRows[i];
+            if (row.WeightValue is null) continue;
+
+            // Column centers: each column occupies 100/count of the width.
+            var x = (i + 0.5) * (100.0 / count);
+            var y = 100.0 - (row.WeightValue.Value / _barMaxWeight * 100.0);
+            y = Math.Clamp(y, 0, 100);
+
+            _weightLineDots.Add((x, y));
+            pts.Add($"{x.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)},{y.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}");
+        }
+
+        _weightLinePoints = string.Join(" ", pts);
     }
 
     private static double? NearestValue(
@@ -694,14 +745,6 @@ else
         _selectedFamilyId = familyId;
         _highlightedPersonId = null;
         await LoadChartAsync();
-    }
-
-    private async Task ToggleDefaultFamily(string familyId)
-    {
-        if (_userId is null) return;
-
-        _defaultFamilyId = _defaultFamilyId == familyId ? null : familyId;
-        await Families.SetDefaultFamilyAsync(_userId, _defaultFamilyId);
     }
 
     private async Task SetMetric(string metric)

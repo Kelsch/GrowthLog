@@ -1073,26 +1073,110 @@ main {
     transition: height 0.2s ease;
 }
 
-/* Grouped (height + weight) bars share the track side by side. */
-.vbar-track-grouped {
-    flex-direction: row;
+/* "Both" mode: height columns with a weight line overlay. */
+.both-chart {
+    position: relative;
+    margin-bottom: 1.5rem;
+    padding-top: 1.25rem;
+}
+
+.both-chart-axis-label {
+    position: absolute;
+    top: 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #334155;
+}
+
+.both-chart-axis-left {
+    left: 0;
+}
+
+.both-chart-axis-right {
+    right: 0;
+    color: #dc2626;
+}
+
+.both-chart-plot {
+    display: flex;
     align-items: flex-end;
-    gap: 2px;
-    background: transparent;
+    gap: clamp(0.4rem, 1.5vw, 1.25rem);
+    min-height: 260px;
+    padding: 0.5rem 0.25rem 0;
+    border-bottom: 2px solid #94a3b8;
+}
+
+.both-chart-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 1 1 0;
+    min-width: 3rem;
+    height: 260px;
+}
+
+.both-chart-value {
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    margin-bottom: 0.25rem;
+}
+
+.both-chart-track {
+    display: flex;
+    align-items: flex-end;
+    width: 100%;
+    max-width: 3.5rem;
+    flex: 1;
+    background: #f1f3f5;
+    border-radius: 0.375rem 0.375rem 0 0;
+    overflow: hidden;
+}
+
+.both-chart-bar {
+    width: 100%;
+    border-radius: 0.375rem 0.375rem 0 0;
+    transition: height 0.2s ease;
+}
+
+.both-chart-name {
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-top: 0.4rem;
+    max-width: 6rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+}
+
+/* Weight line overlay sits on top of the columns. The SVG spans the plot
+   area only (above the name labels) so the line aligns with the bars. */
+.both-chart-line {
+    position: absolute;
+    left: 0.25rem;
+    right: 0.25rem;
+    top: 1.25rem;
+    height: 260px;
+    width: calc(100% - 0.5rem);
+    pointer-events: none;
     overflow: visible;
 }
 
-.vbar-track-grouped .vbar-bar {
-    flex: 1 1 0;
-    width: auto;
-}
+@media (max-width: 768px) {
+    .both-chart-plot {
+        gap: 0.4rem;
+    }
 
-.vbar-bar-height {
-    background: #1d4ed8;
-}
+    .both-chart-col {
+        min-width: 2.75rem;
+    }
 
-.vbar-bar-weight {
-    background: #dc2626;
+    .both-chart-name {
+        max-width: 4rem;
+    }
 }
 
 .vbar-name {
@@ -1128,12 +1212,7 @@ main {
     margin-bottom: 0.75rem;
 }
 
-.family-chip-wrap {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.15rem;
-}
-
+/* Family star/default controls live on the Families pages, not the Dashboard. */
 .family-star {
     background: none;
     border: none;
