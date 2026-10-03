@@ -1255,13 +1255,7 @@ main {
 .family-star.active {
     color: #f59e0b;
 }
-```
 
-Now the responsive width fix. The `.content` max-width is 1100px — widen it on large screens.
-
-src\GrowthLog.Web\wwwroot\app.css
-```css
-<<<<<<< SEARCH
 .content {
     padding: 1.5rem;
     max-width: 1100px;

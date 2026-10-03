@@ -212,4 +212,5 @@ E:\Source\Repos\Kelsch\GrowthLog\src\GrowthLog.Web\obj\Debug\net10.0\GrowthLog.W
 E:\Source\Repos\Kelsch\GrowthLog\src\GrowthLog.Web\obj\Debug\net10.0\GrowthLog.Web.genruntimeconfig.cache
 E:\Source\Repos\Kelsch\GrowthLog\src\GrowthLog.Web\obj\Debug\net10.0\ref\GrowthLog.Web.dll
 E:\Source\Repos\Kelsch\GrowthLog\src\GrowthLog.Web\bin\Debug\net10.0\db\migrations\0004_default_family.sql
-E:\Source\Repos\Kelsch\GrowthLog\src\GrowthLog.Web\obj\Debug\net10.0\compressed\nn5hiwgzu0-{0}-ejcfhp0ozi-ejcfhp0ozi.gz
+E:\Source\Repos\Kelsch\GrowthLog\src\GrowthLog.Web\obj\Debug\net10.0\GrowthLog.Web.sourcelink.json
+E:\Source\Repos\Kelsch\GrowthLog\src\GrowthLog.Web\obj\Debug\net10.0\compressed\nn5hiwgzu0-{0}-z3oe8jc8e3-z3oe8jc8e3.gz
