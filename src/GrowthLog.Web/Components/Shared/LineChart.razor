@@ -92,6 +92,8 @@
 @code {
     [Parameter] public IReadOnlyList<GrowthLog.Web.Data.Charts.ChartSeries> Series { get; set; } = new List<GrowthLog.Web.Data.Charts.ChartSeries>();
     [Parameter] public string XAxisMode { get; set; } = GrowthLog.Web.Data.Charts.ChartXAxisModes.Age;
+    /// <summary>"Height" or "Weight" — selects which unit family the Y axis uses.</summary>
+    [Parameter] public string Metric { get; set; } = GrowthLog.Web.Data.Charts.ChartMetrics.Height;
     [Parameter] public string YUnit { get; set; } = "cm";
     /// <summary>"Imperial" or "Metric" — controls how Y values are labeled.</summary>
     [Parameter] public string UnitSystem { get; set; } = "Imperial";
@@ -179,15 +181,19 @@
     private static string Fmt(double v)
         => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 
+    private bool IsWeight
+        => string.Equals(Metric, GrowthLog.Web.Data.Charts.ChartMetrics.Weight, StringComparison.OrdinalIgnoreCase)
+           || string.Equals(YUnit, "kg", StringComparison.OrdinalIgnoreCase);
+
     private string FormatY(double v)
-        => YUnit == "kg"
+        => IsWeight
             ? UnitConverter.FormatWeight(v, UnitSystem)
             : UnitConverter.FormatHeight(v, UnitSystem);
 
     private string YAxisLabel
-        => YUnit == "kg"
-            ? (UnitSystem == "Metric" ? "Weight (kg)" : "Weight (lb)")
-            : (UnitSystem == "Metric" ? "Height (cm)" : "Height (in)");
+        => IsWeight
+            ? (UnitConverter.NormalizeUnitSystem(UnitSystem) == "Metric" ? "Weight (kg)" : "Weight (lb)")
+            : (UnitConverter.NormalizeUnitSystem(UnitSystem) == "Metric" ? "Height (cm)" : "Height (in)");
 
     private string XAxisLabel
         => XAxisMode == GrowthLog.Web.Data.Charts.ChartXAxisModes.Age

@@ -48,12 +48,113 @@ else
         </div>
     </div>
 
-    <div class="section-header">
-        <div class="dashboard-col-growth">
-            <div class="section-header">
-                <h2>Family growth</h2>
-                <a class="btn btn-sm btn-outline-secondary" href="compare">Open full compare</a>
+    <div class="dashboard-col-growth">
+        <div class="section-header">
+            <h2>Family growth</h2>
+            <a class="btn btn-sm btn-outline-secondary" href="compare">Open full compare</a>
+        </div>
+
+        @if (_ownFamilies.Count > 0)
+        {
+            <div class="chart-family-chips">
+                @foreach (var f in _ownFamilies)
+                {
+                    <button type="button"
+                            class="filter-chip @(_selectedFamilyId == f.Id ? "active" : "")"
+                            @onclick="() => SelectFamily(f.Id)">
+                        @f.Name
+                    </button>
+                }
             </div>
+        }
+
+        <div class="chart-toolbar">
+            <div class="chart-metric-toggle">
+                <button type="button"
+                        class="filter-chip @(_chartMetric == ChartMetrics.Height ? "active" : "")"
+                        @onclick='() => SetMetric(ChartMetrics.Height)'>
+                    Height
+                </button>
+                <button type="button"
+                        class="filter-chip @(_chartMetric == ChartMetrics.Weight ? "active" : "")"
+                        @onclick='() => SetMetric(ChartMetrics.Weight)'>
+                    Weight
+                </button>
+            </div>
+
+            <div class="chart-range-toggle">
+                <button type="button"
+                        class="filter-chip @(_chartTab == ChartTabs.ByAge ? "active" : "")"
+                        @onclick='() => SetTab(ChartTabs.ByAge)'>
+                    By age
+                </button>
+                <button type="button"
+                        class="filter-chip @(_chartTab == ChartTabs.OverTime ? "active" : "")"
+                        @onclick='() => SetTab(ChartTabs.OverTime)'>
+                    Over time
+                </button>
+            </div>
+        </div>
+
+        @if (_chartTab == ChartTabs.ByAge)
+        {
+            <div class="same-age-controls mb-3">
+                <label class="form-label" for="dash-age-slider">Age (years)</label>
+                <div class="same-age-controls-row">
+                    <input id="dash-age-slider" type="range"
+                           min="@MinAge" max="@MaxAge" step="1"
+                           value="@_selectedAge"
+                           @oninput="OnAgeSliderChanged" />
+                    <input type="number" class="form-control same-age-number"
+                           min="@MinAge" max="@MaxAge" step="1"
+                           value="@_selectedAge"
+                           @oninput="OnAgeNumberChanged" />
+                </div>
+                <p class="text-muted">Nearest actual measurement within ±6 months of the selected age. Missing values are not interpolated.</p>
+            </div>
+
+            @if (_barRows.Count == 0)
+            {
+                <EmptyState Icon="📊"
+                            Title="No measurements to compare yet."
+                            Description="Add a measurement for someone in this family to see the comparison." />
+            }
+            else
+            {
+                <div class="same-age-plot">
+                    @{ var rank = 0; }
+                    @foreach (var row in _barRows)
+                    {
+                        rank++;
+                        <div class="same-age-row">
+                            <div class="same-age-rank">@rank</div>
+                            <div class="same-age-name">@row.PersonName</div>
+                            <div class="same-age-bar-track">
+                                <div class="same-age-bar"
+                                     style="width:@(BarWidthPercent(row.Value!.Value).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;background:@ColorFor(row.PersonId)">
+                                </div>
+                            </div>
+                            <div class="same-age-value">@FormatValue(row.Value!.Value)</div>
+                        </div>
+                    }
+                </div>
+
+                @if (_missingBarRows.Count > 0)
+                {
+                    <div class="same-age-missing-section">
+                        <h3 class="same-age-missing-heading">No measurement near age @_selectedAge.ToString("0.#")</h3>
+                        <ul class="same-age-missing-list">
+                            @foreach (var row in _missingBarRows)
+                            {
+                                <li>@row.PersonName</li>
+                            }
+                        </ul>
+                    </div>
+                }
+            }
+        }
+        else
+        {
             @if (_snapshotSeries.Count == 0)
             {
                 <EmptyState Icon="📈"
@@ -64,11 +165,14 @@ else
             {
                 <LineChart Series="_snapshotSeries"
                            XAxisMode="Age"
-                           YUnit="cm"
+                           Metric="_chartMetric"
+                           YUnit="@(_chartMetric == ChartMetrics.Weight ? "kg" : "cm")"
                            UnitSystem="_unitSystem"
+                           HighlightedPersonId="_highlightedPersonId"
+                           OnLegendClick="OnLegendClick"
                            Class="chart-card" />
             }
-        </div>
+        }
     </div>
 
     <div class="dashboard-two-col">
@@ -223,6 +327,22 @@ else
 
     private const int UpcomingWindowDays = 90;
     private const int SnapshotMaxPeople = 5;
+    private const double AgeToleranceYears = 0.5; // ±6 months
+
+    private static class ChartTabs
+    {
+        public const string ByAge = "ByAge";
+        public const string OverTime = "OverTime";
+    }
+
+    private string _chartTab = ChartTabs.ByAge;
+    private string _chartMetric = ChartMetrics.Height;
+    private string? _selectedFamilyId;
+    private string? _highlightedPersonId;
+    private double _selectedAge = 10;
+    private List<BarRow> _barRows = new();
+    private List<BarRow> _missingBarRows = new();
+    private double _barMaxValue = 1;
 
     private string Greeting
     {
@@ -399,18 +519,67 @@ else
             .ThenBy(u => u.PersonName)
             .ToList();
 
-        // Read-only growth snapshot: a small default set (first few visible
-        // people) so the dashboard card stays uncluttered. Authorization is
-        // enforced inside ChartDataService.
-        var snapshotIds = peopleById.Values
-            .Select(p => p.Id)
-            .Take(SnapshotMaxPeople)
-            .ToHashSet(StringComparer.Ordinal);
+        // Default to one primary family so the chart isn't a random mix of
+        // people across families. Fall back to the first visible family.
+        if (_selectedFamilyId is null || _ownFamilies.All(f => f.Id != _selectedFamilyId))
+        {
+            _selectedFamilyId = _ownFamilies.FirstOrDefault()?.Id;
+        }
 
-        _snapshotSeries = snapshotIds.Count == 0
-            ? new List<GrowthLog.Web.Data.Charts.ChartSeries>()
-            : await Charts.GetSeriesAsync(_userId, GrowthLog.Web.Data.Charts.ChartMetrics.Height, snapshotIds);
+        await LoadChartAsync();
     }
+
+    private async Task LoadChartAsync()
+    {
+        if (_userId is null) return;
+
+        // People in the selected family, ordered oldest -> youngest by DOB.
+        var familyPeople = _visibleRows
+            .Where(r => _selectedFamilyId is null || r.FamilyId == _selectedFamilyId)
+            .GroupBy(r => r.Id, StringComparer.Ordinal)
+            .Select(g => g.First())
+            .OrderBy(p => ParseDob(p.DateOfBirth))
+            .ToList();
+
+        var personIds = familyPeople.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
+
+        // Line chart (over time) — authorization enforced inside ChartDataService.
+        _snapshotSeries = personIds.Count == 0
+            ? new List<GrowthLog.Web.Data.Charts.ChartSeries>()
+            : await Charts.GetSeriesAsync(_userId, _chartMetric, personIds);
+
+        // Bar chart (by age) — nearest actual measurement within tolerance.
+        var seriesById = _snapshotSeries.ToDictionary(s => s.PersonId, StringComparer.Ordinal);
+        var rows = new List<BarRow>();
+        foreach (var p in familyPeople)
+        {
+            double? value = null;
+            if (seriesById.TryGetValue(p.Id, out var s))
+            {
+                var nearest = s.Points
+                    .Where(pt => Math.Abs(pt.AgeYears - _selectedAge) <= AgeToleranceYears)
+                    .OrderBy(pt => Math.Abs(pt.AgeYears - _selectedAge))
+                    .FirstOrDefault();
+                value = nearest?.Y;
+            }
+
+            rows.Add(new BarRow
+            {
+                PersonId = p.Id,
+                PersonName = p.FullName,
+                Value = value
+            });
+        }
+
+        _barRows = rows.Where(r => r.Value is not null)
+            .OrderByDescending(r => r.Value!.Value)
+            .ToList();
+        _missingBarRows = rows.Where(r => r.Value is null).ToList();
+        _barMaxValue = _barRows.Select(r => r.Value!.Value).DefaultIfEmpty(1).Max();
+    }
+
+    private static DateOnly ParseDob(string dob)
+        => DateOnly.TryParse(dob, out var d) ? d : DateOnly.MaxValue;
 
     private void OpenAddFromDashboard()
     {
@@ -448,6 +617,92 @@ else
     {
         CloseDialog();
         await LoadAsync();
+    }
+
+    private async Task SelectFamily(string familyId)
+    {
+        _selectedFamilyId = familyId;
+        _highlightedPersonId = null;
+        await LoadChartAsync();
+    }
+
+    private async Task SetMetric(string metric)
+    {
+        _chartMetric = metric;
+        await LoadChartAsync();
+    }
+
+    private void SetTab(string tab)
+    {
+        _chartTab = tab;
+    }
+
+    private void OnLegendClick(string personId)
+    {
+        _highlightedPersonId = _highlightedPersonId == personId ? null : personId;
+    }
+
+    private async Task OnAgeSliderChanged(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var v))
+        {
+            _selectedAge = Math.Clamp(v, MinAge, MaxAge);
+            await LoadChartAsync();
+        }
+    }
+
+    private async Task OnAgeNumberChanged(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var v))
+        {
+            _selectedAge = Math.Clamp(v, MinAge, MaxAge);
+            await LoadChartAsync();
+        }
+    }
+
+    private double MinAge => 0;
+
+    private double MaxAge
+    {
+        get
+        {
+            var max = _snapshotSeries.SelectMany(s => s.Points)
+                .Select(p => p.AgeYears)
+                .DefaultIfEmpty(18)
+                .Max();
+            return Math.Max(1, Math.Ceiling(max));
+        }
+    }
+
+    private string FormatValue(double v)
+        => _chartMetric == ChartMetrics.Weight
+            ? UnitConverter.FormatWeight(v, _unitSystem)
+            : UnitConverter.FormatHeight(v, _unitSystem);
+
+    private double BarWidthPercent(double value)
+    {
+        if (_barMaxValue <= 0) return 0;
+        return Math.Max(2, value / _barMaxValue * 100);
+    }
+
+    private static readonly string[] Palette =
+    {
+        "#1d4ed8", "#dc2626", "#15803d", "#b45309", "#7e22ce",
+        "#0e7490", "#be185d", "#4d7c0f", "#c2410c", "#4338ca"
+    };
+
+    private static string ColorFor(string personId)
+    {
+        var hash = 0;
+        foreach (var c in personId) hash = (hash * 31 + c) & 0x7fffffff;
+        return Palette[hash % Palette.Length];
+    }
+
+    private class BarRow
+    {
+        public string PersonId { get; set; } = string.Empty;
+        public string PersonName { get; set; } = string.Empty;
+        public double? Value { get; set; }
     }
 
     private class UpcomingRow

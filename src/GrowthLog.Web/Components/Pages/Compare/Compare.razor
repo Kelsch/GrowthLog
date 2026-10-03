@@ -187,7 +187,8 @@ else
 
         <LineChart Series="_series"
                     XAxisMode="_xAxis"
-                    YUnit="cm"
+                    Metric="_metric"
+                    YUnit="@(_metric == ChartMetrics.Weight ? "kg" : "cm")"
                     UnitSystem="_unitSystem"
                     Class="chart-card" />
     }

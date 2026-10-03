@@ -1023,6 +1023,14 @@ main {
     flex-shrink: 0;
 }
 
+/* GrowthLog dashboard chart family chips */
+.chart-family-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 0.75rem;
+}
+
 /* GrowthLog chart toolbar */
 .chart-toolbar {
     display: flex;
