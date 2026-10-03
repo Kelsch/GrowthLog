@@ -1,5 +1,7 @@
 @page "/families"
 @attribute [Authorize]
+@rendermode InteractiveServer
+
 @inject FamilyRepository Families
 @inject FamilyMembershipRepository Memberships
 @inject AuthenticationStateProvider AuthState
@@ -41,6 +43,7 @@ else
     <DataAnnotationsValidator />
     <div class="input-group">
         <InputText @bind-Value="_newFamily.Name" class="form-control" placeholder="Family name" />
+        <AntiforgeryToken />
         <button type="submit" class="btn btn-primary">Create</button>
     </div>
 </EditForm>
