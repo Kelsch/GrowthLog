@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("GrowthLog.Web")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7840c2cdd5d9e116f17d537234191e62cafe02c0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+370c5673df9f682d30895cdfc814dfe10d5132ce")]
 [assembly: System.Reflection.AssemblyProductAttribute("GrowthLog.Web")]
 [assembly: System.Reflection.AssemblyTitleAttribute("GrowthLog.Web")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
