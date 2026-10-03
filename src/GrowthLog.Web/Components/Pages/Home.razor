@@ -180,6 +180,7 @@ else
                         </div>
                     </div>
                 }
+            }
 
         @if (_missingBarRows.Count > 0)
         {
@@ -357,7 +358,6 @@ else
     private string _chartMetric = ChartMetrics.Height;
     private string? _selectedFamilyId;
     private string? _defaultFamilyId;
-    private string? _highlightedPersonId;
     private double _selectedAge = 10;
     private List<BarRow> _barRows = new();
     private List<BarRow> _missingBarRows = new();
@@ -734,7 +734,6 @@ else
     private async Task SelectFamily(string familyId)
     {
         _selectedFamilyId = familyId;
-        _highlightedPersonId = null;
         await LoadChartAsync();
     }
 
