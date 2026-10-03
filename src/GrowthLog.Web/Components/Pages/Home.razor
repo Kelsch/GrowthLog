@@ -87,23 +87,9 @@ else
                 </button>
             </div>
 
-            <div class="chart-range-toggle">
-                <button type="button"
-                        class="filter-chip @(_chartTab == ChartTabs.ByAge ? "active" : "")"
-                        @onclick='() => SetTab(ChartTabs.ByAge)'>
-                    By age
-                </button>
-                <button type="button"
-                        class="filter-chip @(_chartTab == ChartTabs.OverTime ? "active" : "")"
-                        @onclick='() => SetTab(ChartTabs.OverTime)'>
-                    Over time
-                </button>
-            </div>
         </div>
 
-        @if (_chartTab == ChartTabs.ByAge)
-        {
-            <div class="same-age-controls mb-3">
+        <div class="same-age-controls mb-3">
                 <label class="form-label" for="dash-age-slider">Age (years)</label>
                 <div class="same-age-controls-row">
                     <input id="dash-age-slider" type="range"
@@ -195,39 +181,17 @@ else
                     </div>
                 }
 
-                @if (_missingBarRows.Count > 0)
-                {
-                    <div class="same-age-missing-section">
-                        <h3 class="same-age-missing-heading">No measurement near age @_selectedAge.ToString("0.#")</h3>
-                        <ul class="same-age-missing-list">
-                            @foreach (var row in _missingBarRows)
-                            {
-                                <li>@row.PersonName</li>
-                            }
-                        </ul>
-                    </div>
-                }
-            }
-        }
-        else
+        @if (_missingBarRows.Count > 0)
         {
-            @if (_snapshotSeries.Count == 0)
-            {
-                <EmptyState Icon="📈"
-                            Title="No growth data to show yet."
-                            Description="Add a measurement to see your family's growth over time." />
-            }
-            else
-            {
-                <LineChart Series="_snapshotSeries"
-                           XAxisMode="Age"
-                           Metric="_chartMetric"
-                           YUnit="@(_chartMetric == ChartMetrics.Weight ? "kg" : "cm")"
-                           UnitSystem="_unitSystem"
-                           HighlightedPersonId="_highlightedPersonId"
-                           OnLegendClick="OnLegendClick"
-                           Class="chart-card" />
-            }
+            <div class="same-age-missing-section">
+                <h3 class="same-age-missing-heading">No measurement near age @_selectedAge.ToString("0.#")</h3>
+                <ul class="same-age-missing-list">
+                    @foreach (var row in _missingBarRows)
+                    {
+                        <li>@row.PersonName</li>
+                    }
+                </ul>
+            </div>
         }
     </div>
 
@@ -385,18 +349,11 @@ else
     private const int SnapshotMaxPeople = 5;
     private const double AgeToleranceYears = 0.5; // ±6 months
 
-    private static class ChartTabs
-    {
-        public const string ByAge = "ByAge";
-        public const string OverTime = "OverTime";
-    }
-
     private static class MetricModes
     {
         public const string Both = "Both";
     }
 
-    private string _chartTab = ChartTabs.ByAge;
     private string _chartMetric = ChartMetrics.Height;
     private string? _selectedFamilyId;
     private string? _defaultFamilyId;
@@ -787,15 +744,6 @@ else
         await LoadChartAsync();
     }
 
-    private void SetTab(string tab)
-    {
-        _chartTab = tab;
-    }
-
-    private void OnLegendClick(string personId)
-    {
-        _highlightedPersonId = _highlightedPersonId == personId ? null : personId;
-    }
 
     private async Task OnAgeSliderChanged(ChangeEventArgs e)
     {
