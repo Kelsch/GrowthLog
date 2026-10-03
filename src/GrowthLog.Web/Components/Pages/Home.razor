@@ -145,19 +145,34 @@ else
                                 </div>
                             }
                         </div>
-                        <svg class="both-chart-line" viewBox="0 0 100 100" preserveAspectRatio="none">
+                        @* Weight overlay. The SVG uses a pixel viewBox that matches
+                           the plot area (bars only, above the name row) so markers
+                           stay circular and the line never crosses the labels.
+                           Missing weights are simply omitted (gap in the line). *@
+                        <svg class="both-chart-line"
+                             viewBox="0 0 @BothPlotWidth @BothPlotHeight"
+                             preserveAspectRatio="none">
                             @if (_weightLinePoints.Length > 1)
                             {
-                                <polyline fill="none" stroke="#dc2626" stroke-width="0.6"
-                                          vector-effect="non-scaling-stroke"
+                                <polyline fill="none" stroke="#dc2626" stroke-width="2"
+                                          stroke-linejoin="round" stroke-linecap="round"
                                           points="@_weightLinePoints" />
                             }
                             @foreach (var pt in _weightLineDots)
                             {
-                                <circle cx="@pt.X" cy="@pt.Y" r="0.9" fill="#dc2626"
-                                        vector-effect="non-scaling-stroke" />
+                                <circle cx="@pt.X" cy="@pt.Y" r="5" fill="#dc2626"
+                                        stroke="#ffffff" stroke-width="1.5" />
                             }
                         </svg>
+                        @* Weight value labels, positioned in the same pixel space
+                           as the overlay so they sit just above each marker. *@
+                        @foreach (var lbl in _weightLabels)
+                        {
+                            <span class="both-chart-weight-label"
+                                  style="left:@(lbl.LeftPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;top:@(lbl.TopPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%">
+                                @lbl.Text
+                            </span>
+                        }
                     </div>
                 }
                 else
@@ -394,6 +409,13 @@ else
     private double _barMaxWeight = 1;
     private string _weightLinePoints = string.Empty;
     private List<(double X, double Y)> _weightLineDots = new();
+    private List<WeightLabel> _weightLabels = new();
+
+    // Pixel-space dimensions for the weight overlay. These match the CSS
+    // height of the plot area (bars only) so markers render as true circles
+    // and the line stays above the name row.
+    private const double BothPlotWidth = 1000;
+    private const double BothPlotHeight = 260;
 
     private string Greeting
     {
@@ -656,12 +678,16 @@ else
 
     /// <summary>
     /// Builds the weight overlay line for "Both" mode. Coordinates are in a
-    /// 0..100 viewBox: X is the column center, Y is scaled to the weight axis
-    /// (0 = top, 100 = baseline). Only actual measurements are plotted.
+    /// pixel viewBox matching the plot area (bars only, above the name row):
+    /// X is the column center, Y is scaled to the weight axis (0 = top,
+    /// BothPlotHeight = baseline). Only actual measurements are plotted, so a
+    /// missing weight leaves a gap instead of dropping to the baseline.
     /// </summary>
     private void BuildWeightLine()
     {
         _weightLineDots = new();
+        _weightLabels = new();
+
         var count = _barRows.Count;
         if (count == 0 || _barMaxWeight <= 0)
         {
@@ -675,13 +701,21 @@ else
             var row = _barRows[i];
             if (row.WeightValue is null) continue;
 
-            // Column centers: each column occupies 100/count of the width.
-            var x = (i + 0.5) * (100.0 / count);
-            var y = 100.0 - (row.WeightValue.Value / _barMaxWeight * 100.0);
-            y = Math.Clamp(y, 0, 100);
+            // Column centers: each column occupies 1/count of the width.
+            var x = (i + 0.5) * (BothPlotWidth / count);
+            var y = BothPlotHeight - (row.WeightValue.Value / _barMaxWeight * BothPlotHeight);
+            y = Math.Clamp(y, 0, BothPlotHeight);
 
             _weightLineDots.Add((x, y));
             pts.Add($"{x.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)},{y.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}");
+
+            // Label sits just above the marker, in the same pixel space.
+            _weightLabels.Add(new WeightLabel
+            {
+                Text = UnitConverter.FormatWeight(row.WeightValue, _unitSystem),
+                LeftPercent = x / BothPlotWidth * 100.0,
+                TopPercent = Math.Max(0, (y - 18) / BothPlotHeight * 100.0)
+            });
         }
 
         _weightLinePoints = string.Join(" ", pts);
@@ -849,6 +883,13 @@ else
         public double? Value { get; set; }
         public double? HeightValue { get; set; }
         public double? WeightValue { get; set; }
+    }
+
+    private class WeightLabel
+    {
+        public string Text { get; set; } = string.Empty;
+        public double LeftPercent { get; set; }
+        public double TopPercent { get; set; }
     }
 
     private class UpcomingRow

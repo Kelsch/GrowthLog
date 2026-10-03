@@ -1153,7 +1153,8 @@ main {
 }
 
 /* Weight line overlay sits on top of the columns. The SVG spans the plot
-   area only (above the name labels) so the line aligns with the bars. */
+   area only (above the name labels) so the line aligns with the bars and
+   never crosses the name row. */
 .both-chart-line {
     position: absolute;
     left: 0.25rem;
@@ -1163,6 +1164,18 @@ main {
     width: calc(100% - 0.5rem);
     pointer-events: none;
     overflow: visible;
+}
+
+/* Weight value labels, positioned in the overlay's pixel space. */
+.both-chart-weight-label {
+    position: absolute;
+    transform: translateX(-50%);
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #dc2626;
+    white-space: nowrap;
+    pointer-events: none;
+    text-shadow: 0 0 3px #fff, 0 0 3px #fff;
 }
 
 @media (max-width: 768px) {
