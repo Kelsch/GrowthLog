@@ -46,12 +46,12 @@ public static class IdentityEndpoints
         app.MapPost("/account/login", async (
             [FromForm] string email,
             [FromForm] string password,
-            [FromForm] bool rememberMe,
+            [FromForm] bool? rememberMe,
             [FromForm] string? returnUrl,
             SignInManager<ApplicationUser> signInManager) =>
         {
             var result = await signInManager.PasswordSignInAsync(
-                email, password, rememberMe, lockoutOnFailure: false);
+                email, password, rememberMe ?? false, lockoutOnFailure: false);
 
             if (!result.Succeeded)
             {
