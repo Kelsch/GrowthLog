@@ -53,6 +53,8 @@ a:hover {
 .page {
     display: flex;
     min-height: 100vh;
+    max-width: 100%;
+    overflow-x: hidden;
 }
 
 .sidebar {
@@ -145,6 +147,8 @@ main {
     padding: 1.5rem;
     max-width: 1100px;
     width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
 }
 
 /* Forms */
@@ -1080,26 +1084,42 @@ main {
 .both-chart {
     position: relative;
     margin-bottom: 1.5rem;
-    padding-top: 1.25rem;
-    overflow-x: auto;
-    overflow-y: hidden;
+    padding-top: 0.25rem;
+    max-width: 100%;
+    min-width: 0;
+}
+
+/* Axis titles sit in a normal header row above the scroll area so they can
+   never collide with the bar value labels or the weight line. */
+.both-chart-axis-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
 }
 
 .both-chart-axis-label {
-    position: absolute;
-    top: 0;
     font-size: 0.75rem;
     font-weight: 700;
     color: #334155;
 }
 
 .both-chart-axis-left {
-    left: 0;
+    color: #334155;
 }
 
 .both-chart-axis-right {
-    right: 0;
     color: #dc2626;
+}
+
+/* Only the chart itself scrolls horizontally on narrow screens; the page
+   shell never does. */
+.chart-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
 }
 
 .both-chart-plot {
@@ -1159,12 +1179,13 @@ main {
 
 /* Weight line overlay sits on top of the columns. The SVG spans the plot
    area only (above the name labels) so the line aligns with the bars and
-   never crosses the name row. */
+   never crosses the name row. It is positioned relative to the scroll
+   container so it tracks the bars when the chart scrolls. */
 .both-chart-line {
     position: absolute;
     left: 0.25rem;
     right: 0.25rem;
-    top: 1.25rem;
+    top: 1.5rem;
     height: 260px;
     width: calc(100% - 0.5rem);
     pointer-events: none;
@@ -1232,6 +1253,21 @@ main {
     }
 }
 
+/* Under ~576px the "Both" chart is too busy for per-bar value text; hide
+   the height value labels too and rely on the tooltip. The bars, weight
+   line, and circular markers stay. */
+@media (max-width: 576px) {
+    .both-chart-value {
+        display: none;
+    }
+
+    .both-chart-name,
+    .vbar-name {
+        max-width: 3.25rem;
+        font-size: 0.72rem;
+    }
+}
+
 .vbar-name {
     font-size: 0.8rem;
     font-weight: 500;
@@ -1258,10 +1294,12 @@ main {
 }
 
 /* Keep the vertical bar charts scrollable rather than squashed when there
-   are many people on a narrow screen. */
+   are many people on a narrow screen. The min-width lives on the inner
+   plot so only the .chart-scroll wrapper scrolls, never the page. */
 .vbar-chart,
 .both-chart {
-    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .vbar-plot,
@@ -1281,6 +1319,7 @@ main {
    containers are allowed to scroll when they intentionally overflow. */
 html, body {
     overflow-x: hidden;
+    max-width: 100%;
 }
 
 /* Family star/default controls live on the Families pages, not the Dashboard. */

@@ -115,8 +115,11 @@ else
                 @if (_chartMetric == MetricModes.Both)
                 {
                     <div class="both-chart">
-                        <div class="both-chart-axis-label both-chart-axis-left">Height (@(_unitSystem == "Metric" ? "cm" : "ft-in"))</div>
-                        <div class="both-chart-axis-label both-chart-axis-right">Weight (@(_unitSystem == "Metric" ? "kg" : "lb"))</div>
+                        <div class="both-chart-axis-row">
+                            <span class="both-chart-axis-label both-chart-axis-left">Height (@(_unitSystem == "Metric" ? "cm" : "ft-in"))</span>
+                            <span class="both-chart-axis-label both-chart-axis-right">Weight (@(_unitSystem == "Metric" ? "kg" : "lb"))</span>
+                        </div>
+                        <div class="chart-scroll">
                         <div class="both-chart-plot">
                             @foreach (var row in _barRows)
                             {
@@ -160,11 +163,13 @@ else
                                 @lbl.Text
                             </span>
                         }
+                        </div>
                     </div>
                 }
                 else
                 {
                     <div class="vbar-chart">
+                        <div class="chart-scroll">
                         <div class="vbar-plot">
                             @foreach (var row in _barRows)
                             {
@@ -178,6 +183,7 @@ else
                                     <div class="vbar-name" title="@row.PersonName">@row.FirstName</div>
                                 </div>
                             }
+                        </div>
                         </div>
                     </div>
                 }
