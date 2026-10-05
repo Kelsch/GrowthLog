@@ -1216,6 +1216,72 @@ main {
     text-decoration: underline;
 }
 
+/* Selected bar column: subtle highlight so the readout below is clearly
+   tied to the tapped person. */
+.both-chart-col {
+    cursor: pointer;
+    border-radius: 0.5rem;
+    transition: background 0.15s ease;
+}
+
+.both-chart-col-selected {
+    background: #eff6ff;
+    box-shadow: inset 0 0 0 2px #bfdbfe;
+}
+
+/* Tap/click readout shown below the "Both" chart. */
+.chart-readout {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem 1.25rem;
+    margin-top: 0.75rem;
+    padding: 0.65rem 0.9rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--primary);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.chart-readout-name {
+    font-weight: 600;
+}
+
+.chart-readout-values {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+}
+
+.chart-readout-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
+}
+
+.chart-readout-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+}
+
+.chart-readout-value {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.chart-readout-context {
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.chart-readout-hint {
+    margin: 0.75rem 0 0 0;
+    font-size: 0.85rem;
+}
+
 /* Weight markers rendered as HTML so they stay circular at any width. */
 .both-chart-dot {
     position: absolute;

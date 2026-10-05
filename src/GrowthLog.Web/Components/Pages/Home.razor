@@ -123,11 +123,14 @@ else
                         @* Bars and the weight overlay share one scrolling surface
                            so they move together and stay aligned when the chart
                            scrolls sideways on narrow screens. *@
-                        <div class="chart-surface">
+                        <div class="chart-surface" @onclick="ClearSelection">
                         <div class="both-chart-plot">
                             @foreach (var row in _barRows)
                             {
-                                <div class="both-chart-col" title="@TooltipFor(row)">
+                                <div class="both-chart-col @(_selectedPersonId == row.PersonId ? "both-chart-col-selected" : "")"
+                                     title="@TooltipFor(row)"
+                                     @onclick="() => SelectBar(row.PersonId)"
+                                     @onclick:stopPropagation="true">
                                     <div class="both-chart-value">@FormatValue(row.HeightValue ?? 0)</div>
                                     <div class="both-chart-track">
                                         <div class="both-chart-bar"
@@ -170,6 +173,39 @@ else
                         </div>
                         </div>
                     </div>
+
+                    @* Tap/click readout. On phones the per-bar value labels are
+                       hidden, so this panel shows the exact values for the
+                       selected person in the preferred units. *@
+                    @if (_selectedBarRow is not null)
+                    {
+                        <div class="chart-readout" role="status">
+                            <div class="chart-readout-name">@_selectedBarRow.PersonName</div>
+                            <div class="chart-readout-values">
+                                <span class="chart-readout-item">
+                                    <span class="chart-readout-label">Height</span>
+                                    <span class="chart-readout-value">
+                                        @(_selectedBarRow.HeightValue is null
+                                            ? "—"
+                                            : UnitConverter.FormatHeight(_selectedBarRow.HeightValue, _unitSystem))
+                                    </span>
+                                </span>
+                                <span class="chart-readout-item">
+                                    <span class="chart-readout-label">Weight</span>
+                                    <span class="chart-readout-value">
+                                        @(_selectedBarRow.WeightValue is null
+                                            ? "—"
+                                            : UnitConverter.FormatWeight(_selectedBarRow.WeightValue, _unitSystem))
+                                    </span>
+                                </span>
+                            </div>
+                            <div class="chart-readout-context">Age @_selectedAge.ToString("0.#")</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="chart-readout-hint text-muted">Tap a bar to see exact height and weight.</p>
+                    }
                 }
                 else
                 {
@@ -379,6 +415,7 @@ else
     private string _weightLinePoints = string.Empty;
     private List<WeightDot> _weightLineDots = new();
     private List<WeightLabel> _weightLabels = new();
+    private string? _selectedPersonId;
 
     // Pixel-space dimensions for the weight overlay. These match the CSS
     // height of the plot area (bars only) so markers render as true circles
@@ -752,12 +789,27 @@ else
     private async Task SelectFamily(string familyId)
     {
         _selectedFamilyId = familyId;
+        _selectedPersonId = null;
         await LoadChartAsync();
     }
+
+    private void SelectBar(string personId)
+    {
+        // Tapping the same bar again clears the selection.
+        _selectedPersonId = _selectedPersonId == personId ? null : personId;
+    }
+
+    private void ClearSelection() => _selectedPersonId = null;
+
+    private BarRow? _selectedBarRow
+        => _selectedPersonId is null
+            ? null
+            : _barRows.FirstOrDefault(r => r.PersonId == _selectedPersonId);
 
     private async Task SetMetric(string metric)
     {
         _chartMetric = metric;
+        _selectedPersonId = null;
         await LoadChartAsync();
     }
 
@@ -767,6 +819,7 @@ else
         if (double.TryParse(e.Value?.ToString(), out var v))
         {
             _selectedAge = Math.Clamp(v, MinAge, MaxAge);
+            _selectedPersonId = null;
             await LoadChartAsync();
         }
     }
@@ -776,6 +829,7 @@ else
         if (double.TryParse(e.Value?.ToString(), out var v))
         {
             _selectedAge = Math.Clamp(v, MinAge, MaxAge);
+            _selectedPersonId = null;
             await LoadChartAsync();
         }
     }
