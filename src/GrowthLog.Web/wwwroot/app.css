@@ -1078,6 +1078,8 @@ main {
     position: relative;
     margin-bottom: 1.5rem;
     padding-top: 1.25rem;
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
 .both-chart-axis-label {
@@ -1182,6 +1184,19 @@ main {
     text-decoration: underline;
 }
 
+/* Weight markers rendered as HTML so they stay circular at any width. */
+.both-chart-dot {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    margin-left: -5px;
+    margin-top: -5px;
+    border-radius: 50%;
+    background: #dc2626;
+    box-shadow: 0 0 0 1.5px #ffffff;
+    pointer-events: none;
+}
+
 /* Weight value labels, positioned in the overlay's pixel space. */
 .both-chart-weight-label {
     position: absolute;
@@ -1205,6 +1220,12 @@ main {
 
     .both-chart-name {
         max-width: 4rem;
+    }
+
+    /* On phones the weight value labels crowd the bars; hide them and rely
+       on the tooltip / tap for the exact number. The line and dots remain. */
+    .both-chart-weight-label {
+        display: none;
     }
 }
 
@@ -1233,12 +1254,30 @@ main {
     }
 }
 
+/* Keep the vertical bar charts scrollable rather than squashed when there
+   are many people on a narrow screen. */
+.vbar-chart,
+.both-chart {
+    -webkit-overflow-scrolling: touch;
+}
+
+.vbar-plot,
+.both-chart-plot {
+    min-width: max-content;
+}
+
 /* GrowthLog dashboard chart family chips */
 .chart-family-chips {
     display: flex;
     flex-wrap: wrap;
     gap: 0.35rem;
     margin-bottom: 0.75rem;
+}
+
+/* Prevent the page itself from scrolling horizontally; only the chart
+   containers are allowed to scroll when they intentionally overflow. */
+html, body {
+    overflow-x: hidden;
 }
 
 /* Family star/default controls live on the Families pages, not the Dashboard. */
@@ -1276,6 +1315,7 @@ main {
 .chart-range-toggle {
     display: flex;
     gap: 0.35rem;
+    flex-wrap: wrap;
 }
 
 /* GrowthLog compare */
@@ -1395,9 +1435,19 @@ a:focus-visible {
         flex-direction: column;
     }
 
+    /* On phones the sidebar becomes an overlay drawer so opening it does
+       not push the page content down. It sits above the backdrop. */
     .sidebar {
-        width: 100%;
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: min(280px, 82vw);
+        max-width: 100%;
         display: none;
+        z-index: 1000;
+        overflow-y: auto;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.35);
     }
 
     .sidebar.sidebar-open {
@@ -1408,7 +1458,7 @@ a:focus-visible {
         display: block;
         position: fixed;
         inset: 0;
-        background: rgba(15, 23, 42, 0.35);
+        background: rgba(15, 23, 42, 0.45);
         z-index: 900;
     }
 
@@ -1418,8 +1468,14 @@ a:focus-visible {
     }
 
     .nav-toggle {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         margin-right: auto;
+        min-width: 44px;
+        min-height: 44px;
+        font-size: 1.1rem;
+        line-height: 1;
     }
 
     .col-md-1, .col-md-2, .col-md-3, .col-md-5 {
@@ -1457,6 +1513,13 @@ a:focus-visible {
         align-items: stretch;
     }
 
+    /* Metric toggles and family chips wrap instead of overflowing. */
+    .chart-metric-toggle,
+    .chart-range-toggle,
+    .chart-family-chips {
+        flex-wrap: wrap;
+    }
+
     .same-age-row {
         grid-template-columns: 1.5rem 1fr 4.5rem;
     }
@@ -1473,6 +1536,11 @@ a:focus-visible {
 
     .same-age-number {
         max-width: none;
+    }
+
+    /* Keep the age slider comfortably tappable. */
+    .same-age-controls-row input[type="range"] {
+        min-height: 44px;
     }
 
     .activity-item {
@@ -1494,6 +1562,12 @@ a:focus-visible {
 
 .btn-sm {
     min-height: 36px;
+}
+
+/* The top row must never force horizontal page scroll on phones. */
+.top-row {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
 }
 
 @media (prefers-reduced-motion: reduce) {

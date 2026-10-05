@@ -108,12 +108,12 @@ else
                                       stroke-linejoin="round" stroke-linecap="round"
                                       points="@_weightLinePoints" />
                         }
-                        @foreach (var pt in _weightLineDots)
-                        {
-                            <circle cx="@pt.X" cy="@pt.Y" r="5" fill="#dc2626"
-                                    stroke="#ffffff" stroke-width="1.5" />
-                        }
                     </svg>
+                    @foreach (var pt in _weightLineDots)
+                    {
+                        <span class="both-chart-dot"
+                              style="left:@(pt.LeftPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;top:@(pt.TopPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%"></span>
+                    }
                     @foreach (var lbl in _weightLabels)
                     {
                         <span class="both-chart-weight-label"
@@ -253,7 +253,7 @@ else
     private double _barMaxHeight = 1;
     private double _barMaxWeight = 1;
     private string _weightLinePoints = string.Empty;
-    private List<(double X, double Y)> _weightLineDots = new();
+    private List<WeightDot> _weightLineDots = new();
     private List<WeightLabel> _weightLabels = new();
 
     private const double BothPlotWidth = 1000;
@@ -435,8 +435,13 @@ else
             var y = BothPlotHeight - (row.WeightValue.Value / _barMaxWeight * BothPlotHeight);
             y = Math.Clamp(y, 0, BothPlotHeight);
 
-            _weightLineDots.Add((x, y));
             pts.Add($"{x.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)},{y.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}");
+
+            _weightLineDots.Add(new WeightDot
+            {
+                LeftPercent = x / BothPlotWidth * 100.0,
+                TopPercent = y / BothPlotHeight * 100.0
+            });
 
             _weightLabels.Add(new WeightLabel
             {
@@ -546,6 +551,12 @@ else
         public double? Value { get; set; }
         public double? HeightValue { get; set; }
         public double? WeightValue { get; set; }
+    }
+
+    private class WeightDot
+    {
+        public double LeftPercent { get; set; }
+        public double TopPercent { get; set; }
     }
 
     private class WeightLabel

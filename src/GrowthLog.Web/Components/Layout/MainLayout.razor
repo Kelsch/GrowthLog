@@ -6,7 +6,7 @@
     </div>
     @if (_navOpen)
     {
-        <div class="sidebar-backdrop" @onclick="() => _navOpen = false"></div>
+        <div class="sidebar-backdrop" @onclick="CloseNav"></div>
     }
 
     <main>
@@ -15,7 +15,7 @@
                     class="nav-toggle btn btn-sm btn-outline-secondary"
                     aria-label="@(_navOpen ? "Close navigation" : "Open navigation")"
                     aria-expanded="@_navOpen"
-                    @onclick="() => _navOpen = !_navOpen">
+                    @onclick="ToggleNav">
                 ☰
             </button>
             <AuthorizeView>
@@ -46,4 +46,8 @@
 
 @code {
     private bool _navOpen;
+
+    private void ToggleNav() => _navOpen = !_navOpen;
+
+    private void CloseNav() => _navOpen = false;
 }

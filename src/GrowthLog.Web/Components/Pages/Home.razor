@@ -131,10 +131,11 @@ else
                                 </div>
                             }
                         </div>
-                        @* Weight overlay. The SVG uses a pixel viewBox that matches
-                           the plot area (bars only, above the name row) so markers
-                           stay circular and the line never crosses the labels.
-                           Missing weights are simply omitted (gap in the line). *@
+                        @* Weight overlay. The connecting line is drawn in an SVG
+                           that stretches with the plot (lines don't distort), while
+                           the markers are HTML dots positioned by percentage so they
+                           stay perfectly circular at any width. Missing weights are
+                           simply omitted (gap in the line). *@
                         <svg class="both-chart-line"
                              viewBox="0 0 @BothPlotWidth @BothPlotHeight"
                              preserveAspectRatio="none">
@@ -144,12 +145,12 @@ else
                                           stroke-linejoin="round" stroke-linecap="round"
                                           points="@_weightLinePoints" />
                             }
-                            @foreach (var pt in _weightLineDots)
-                            {
-                                <circle cx="@pt.X" cy="@pt.Y" r="5" fill="#dc2626"
-                                        stroke="#ffffff" stroke-width="1.5" />
-                            }
                         </svg>
+                        @foreach (var pt in _weightLineDots)
+                        {
+                            <span class="both-chart-dot"
+                                  style="left:@(pt.LeftPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;top:@(pt.TopPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%"></span>
+                        }
                         @* Weight value labels, positioned in the same pixel space
                            as the overlay so they sit just above each marker. *@
                         @foreach (var lbl in _weightLabels)
@@ -365,7 +366,7 @@ else
     private double _barMaxHeight = 1;
     private double _barMaxWeight = 1;
     private string _weightLinePoints = string.Empty;
-    private List<(double X, double Y)> _weightLineDots = new();
+    private List<WeightDot> _weightLineDots = new();
     private List<WeightLabel> _weightLabels = new();
 
     // Pixel-space dimensions for the weight overlay. These match the CSS
@@ -663,10 +664,16 @@ else
             var y = BothPlotHeight - (row.WeightValue.Value / _barMaxWeight * BothPlotHeight);
             y = Math.Clamp(y, 0, BothPlotHeight);
 
-            _weightLineDots.Add((x, y));
             pts.Add($"{x.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)},{y.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}");
 
-            // Label sits just above the marker, in the same pixel space.
+            // Markers and labels are positioned by percentage so they scale
+            // with the plot and stay circular on any screen width.
+            _weightLineDots.Add(new WeightDot
+            {
+                LeftPercent = x / BothPlotWidth * 100.0,
+                TopPercent = y / BothPlotHeight * 100.0
+            });
+
             _weightLabels.Add(new WeightLabel
             {
                 Text = UnitConverter.FormatWeight(row.WeightValue, _unitSystem),
@@ -830,6 +837,12 @@ else
         public double? Value { get; set; }
         public double? HeightValue { get; set; }
         public double? WeightValue { get; set; }
+    }
+
+    private class WeightDot
+    {
+        public double LeftPercent { get; set; }
+        public double TopPercent { get; set; }
     }
 
     private class WeightLabel
