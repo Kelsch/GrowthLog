@@ -1122,6 +1122,14 @@ main {
     max-width: 100%;
 }
 
+/* The scrolling content. Bars and the weight overlay both live inside this
+   element so they share one coordinate system and scroll together. It is
+   the positioned ancestor for the absolutely-positioned overlay. */
+.chart-surface {
+    position: relative;
+    min-width: max-content;
+}
+
 .both-chart-plot {
     display: flex;
     align-items: flex-end;
@@ -1179,13 +1187,13 @@ main {
 
 /* Weight line overlay sits on top of the columns. The SVG spans the plot
    area only (above the name labels) so the line aligns with the bars and
-   never crosses the name row. It is positioned relative to the scroll
-   container so it tracks the bars when the chart scrolls. */
+   never crosses the name row. It is positioned relative to .chart-surface
+   (the scrolling content) so it tracks the bars when the chart scrolls. */
 .both-chart-line {
     position: absolute;
     left: 0.25rem;
     right: 0.25rem;
-    top: 1.5rem;
+    top: 0.5rem;
     height: 260px;
     width: calc(100% - 0.5rem);
     pointer-events: none;
@@ -1295,7 +1303,7 @@ main {
 
 /* Keep the vertical bar charts scrollable rather than squashed when there
    are many people on a narrow screen. The min-width lives on the inner
-   plot so only the .chart-scroll wrapper scrolls, never the page. */
+   .chart-surface so only the .chart-scroll wrapper scrolls, never the page. */
 .vbar-chart,
 .both-chart {
     max-width: 100%;

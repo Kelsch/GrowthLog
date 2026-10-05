@@ -83,6 +83,10 @@ else
                         <span class="both-chart-axis-label both-chart-axis-right">Weight (@(_unitSystem == "Metric" ? "kg" : "lb"))</span>
                     </div>
                     <div class="chart-scroll">
+                    @* Bars and the weight overlay share one scrolling surface
+                       so they move together and stay aligned when the chart
+                       scrolls sideways on narrow screens. *@
+                    <div class="chart-surface">
                     <div class="both-chart-plot">
                         @foreach (var row in _barRows)
                         {
@@ -124,6 +128,7 @@ else
                             @lbl.Text
                         </span>
                     }
+                    </div>
                     </div>
                 </div>
             }
