@@ -1,24 +1,10 @@
 @inherits LayoutComponentBase
-@rendermode InteractiveServer
 
 <div class="page">
-    <div class="sidebar @(_navOpen ? "sidebar-open" : "")">
-        <NavMenu OnNavigate="CloseNav" />
-    </div>
-    @if (_navOpen)
-    {
-        <div class="sidebar-backdrop" @onclick="CloseNav"></div>
-    }
+    <NavDrawer />
 
     <main>
         <div class="top-row px-4">
-            <button type="button"
-                    class="nav-toggle btn btn-sm btn-outline-secondary"
-                    aria-label="@(_navOpen ? "Close navigation" : "Open navigation")"
-                    aria-expanded="@_navOpen"
-                    @onclick="ToggleNav">
-                ☰
-            </button>
             <AuthorizeView>
                 <Authorized>
                     <span class="me-3">@context.User.Identity?.Name</span>
@@ -44,11 +30,3 @@
     <a href="" class="reload">Reload</a>
     <a class="dismiss">🗙</a>
 </div>
-
-@code {
-    private bool _navOpen;
-
-    private void ToggleNav() => _navOpen = !_navOpen;
-
-    private void CloseNav() => _navOpen = false;
-}

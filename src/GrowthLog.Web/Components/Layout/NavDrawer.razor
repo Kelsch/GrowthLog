@@ -1,0 +1,31 @@
+@rendermode InteractiveServer
+
+@* Interactive nav drawer. Lives in its own component so MainLayout can stay
+   static (a layout cannot be interactive because LayoutComponentBase.Body is
+   a RenderFragment and cannot be serialized across the interactive boundary).
+   This component owns the open/closed state for the mobile hamburger and
+   renders the sidebar, the backdrop, and the toggle button. *@
+
+<div class="sidebar @(_navOpen ? "sidebar-open" : "")">
+    <NavMenu OnNavigate="CloseNav" />
+</div>
+@if (_navOpen)
+{
+    <div class="sidebar-backdrop" @onclick="CloseNav"></div>
+}
+
+<button type="button"
+        class="nav-toggle btn btn-sm btn-outline-secondary"
+        aria-label="@(_navOpen ? "Close navigation" : "Open navigation")"
+        aria-expanded="@_navOpen"
+        @onclick="ToggleNav">
+    ☰
+</button>
+
+@code {
+    private bool _navOpen;
+
+    private void ToggleNav() => _navOpen = !_navOpen;
+
+    private void CloseNav() => _navOpen = false;
+}
