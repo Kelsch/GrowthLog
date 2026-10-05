@@ -134,9 +134,10 @@ main {
     /* border-bottom: 1px solid var(--border); */
     font-size: 0.9rem;
     color: var(--muted);
-    /* Keep the hamburger above page content so it is always clickable. */
+    /* Keep the top row below the fixed hamburger so the button is never
+       covered at scrollY = 0. */
     position: relative;
-    z-index: 1100;
+    z-index: 1000;
 }
 
 .top-row form {
@@ -1498,9 +1499,19 @@ a:focus-visible {
     outline-offset: 2px;
 }
 
-/* GrowthLog nav toggle (mobile) */
+/* GrowthLog nav toggle (mobile only). Hidden on desktop; the sidebar is
+   always visible there. flex: 0 0 auto prevents it from stretching into a
+   full-height strip when it is a flex child of .page. */
 .nav-toggle {
     display: none;
+    flex: 0 0 auto;
+    align-self: flex-start;
+}
+
+@media (min-width: 769px) {
+    .nav-toggle {
+        display: none !important;
+    }
 }
 
 /* GrowthLog sidebar branding */
@@ -1588,7 +1599,9 @@ a:focus-visible {
     }
 
     /* The hamburger is rendered by NavDrawer (outside .top-row), so pin it
-       to the top-left of the viewport on phones. */
+       to the top-left of the viewport on phones. It is a small icon button
+       (not a full-height strip) and sits above the top row and content so
+       it is clickable immediately, before any scrolling. */
     .nav-toggle {
         display: inline-flex;
         align-items: center;
@@ -1596,11 +1609,16 @@ a:focus-visible {
         position: fixed;
         top: 0.6rem;
         left: 0.75rem;
+        width: 44px;
+        height: 44px;
         min-width: 44px;
         min-height: 44px;
+        max-height: 44px;
+        padding: 0;
         font-size: 1.1rem;
         line-height: 1;
-        z-index: 1100;
+        z-index: 1200;
+        pointer-events: auto;
     }
 
     .col-md-1, .col-md-2, .col-md-3, .col-md-5 {
