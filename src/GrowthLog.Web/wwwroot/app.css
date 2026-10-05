@@ -132,6 +132,9 @@ main {
     /* border-bottom: 1px solid var(--border); */
     font-size: 0.9rem;
     color: var(--muted);
+    /* Keep the hamburger above page content so it is always clickable. */
+    position: relative;
+    z-index: 1100;
 }
 
 .top-row form {
@@ -1435,8 +1438,8 @@ a:focus-visible {
         flex-direction: column;
     }
 
-    /* On phones the sidebar becomes an overlay drawer so opening it does
-       not push the page content down. It sits above the backdrop. */
+    /* On phones the sidebar becomes an off-canvas overlay drawer so opening
+       it does not push the page content down. It sits above the backdrop. */
     .sidebar {
         position: fixed;
         top: 0;
@@ -1444,14 +1447,18 @@ a:focus-visible {
         bottom: 0;
         width: min(280px, 82vw);
         max-width: 100%;
-        display: none;
+        display: flex;
         z-index: 1000;
         overflow-y: auto;
         box-shadow: 0 10px 30px rgba(15, 23, 42, 0.35);
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+        visibility: hidden;
     }
 
     .sidebar.sidebar-open {
-        display: flex;
+        transform: translateX(0);
+        visibility: visible;
     }
 
     .sidebar-backdrop {
@@ -1476,6 +1483,8 @@ a:focus-visible {
         min-height: 44px;
         font-size: 1.1rem;
         line-height: 1;
+        position: relative;
+        z-index: 1100;
     }
 
     .col-md-1, .col-md-2, .col-md-3, .col-md-5 {

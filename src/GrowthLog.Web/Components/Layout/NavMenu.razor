@@ -1,3 +1,9 @@
+@code {
+    [Parameter] public EventCallback OnNavigate { get; set; }
+
+    private Task NavigateAsync() => OnNavigate.InvokeAsync();
+}
+
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">
@@ -12,42 +18,42 @@
         <AuthorizeView>
             <Authorized>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                    <NavLink class="nav-link" href="" Match="NavLinkMatch.All" @onclick="NavigateAsync">
                         <span class="nav-icon" aria-hidden="true">🏠</span> Dashboard
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="families">
+                    <NavLink class="nav-link" href="families" @onclick="NavigateAsync">
                         <span class="nav-icon" aria-hidden="true">👪</span> Families
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="people">
+                    <NavLink class="nav-link" href="people" @onclick="NavigateAsync">
                         <span class="nav-icon" aria-hidden="true">👤</span> People
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="people/mine">
+                    <NavLink class="nav-link" href="people/mine" @onclick="NavigateAsync">
                         <span class="nav-icon" aria-hidden="true">➕</span> People I created
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="compare">
+                    <NavLink class="nav-link" href="compare" @onclick="NavigateAsync">
                         <span class="nav-icon" aria-hidden="true">📊</span> Compare
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="settings">
+                    <NavLink class="nav-link" href="settings" @onclick="NavigateAsync">
                         <span class="nav-icon" aria-hidden="true">⚙️</span> Settings
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="settings/sharing">
+                    <NavLink class="nav-link" href="settings/sharing" @onclick="NavigateAsync">
                         <span class="nav-icon" aria-hidden="true">🔒</span> Sharing
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="settings/invitations">
+                    <NavLink class="nav-link" href="settings/invitations" @onclick="NavigateAsync">
                         <span class="nav-icon" aria-hidden="true">✉️</span> Invitations
                     </NavLink>
                 </div>

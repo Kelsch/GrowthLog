@@ -1,8 +1,9 @@
 @inherits LayoutComponentBase
+@rendermode InteractiveServer
 
 <div class="page">
     <div class="sidebar @(_navOpen ? "sidebar-open" : "")">
-        <NavMenu />
+        <NavMenu OnNavigate="CloseNav" />
     </div>
     @if (_navOpen)
     {
