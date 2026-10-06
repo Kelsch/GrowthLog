@@ -579,18 +579,20 @@ else
 
             var age = AgeCalculator.GetAgeYears(dob, today);
 
-            _upcoming.Add(new UpcomingRow
-            {
-                PersonId = p.Id,
-                PersonName = p.FullName,
-                AgeYears = age,
-                Birthday = due.NextBirthday,
-                Status = due.Status,
-                StatusText = due.StatusText,
-                LastMeasurementDate = due.LastMeasurementDate,
-                SortKey = MeasurementDueCalculator.SortKey(due),
-                DaysUntilDue = due.DaysUntilDue
-            });
+            if (age < 19) {
+                _upcoming.Add(new UpcomingRow
+                {
+                    PersonId = p.Id,
+                    PersonName = p.FullName,
+                    AgeYears = age,
+                    Birthday = due.NextBirthday,
+                    Status = due.Status,
+                    StatusText = due.StatusText,
+                    LastMeasurementDate = due.LastMeasurementDate,
+                    SortKey = MeasurementDueCalculator.SortKey(due),
+                    DaysUntilDue = due.DaysUntilDue
+                });
+            }
         }
 
         _upcoming = _upcoming
