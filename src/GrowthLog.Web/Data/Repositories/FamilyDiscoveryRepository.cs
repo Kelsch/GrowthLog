@@ -126,6 +126,54 @@ public class FamilyDiscoveryRepository
     }
 
     /// <summary>
+    /// Families owned/administered by <paramref name="otherUserId"/> that the
+    /// current user is NOT a member of and has NO existing connection to (in
+    /// either direction). This is the discovery query for the Sharing page:
+    /// it lets a user connect one of their own families to a co-member's
+    /// family, even when the only thing they share is a single membership.
+    ///
+    /// Discovery is still scoped to co-members — the caller must have obtained
+    /// <paramref name="otherUserId"/> from <see cref="GetCoMembersAsync"/>.
+    /// </summary>
+    public async Task<IReadOnlyList<ConnectableFamilyRow>> GetConnectableFamiliesForCoMemberAsync(
+        string userId,
+        string otherUserId)
+    {
+        using var connection = _factory.Create();
+        var rows = await connection.QueryAsync<ConnectableFamilyRow>("""
+            SELECT
+                f.Id AS FamilyId,
+                f.Name AS FamilyName,
+                fm.UserId AS OwnerUserId,
+                fm.Role AS OwnerRole
+            FROM Families f
+            JOIN FamilyMemberships fm
+                ON fm.FamilyId = f.Id
+               AND fm.UserId = @OtherUserId
+               AND fm.Role IN ('Owner', 'Adult')
+            WHERE f.IsDeleted = 0
+              -- Current user is not already a member of this family.
+              AND NOT EXISTS (
+                    SELECT 1 FROM FamilyMemberships mine
+                    WHERE mine.FamilyId = f.Id AND mine.UserId = @UserId
+              )
+              -- No existing connection in either direction between any of the
+              -- current user's families and this family.
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM FamilyConnections c
+                    JOIN FamilyMemberships mine2
+                        ON mine2.UserId = @UserId
+                       AND (c.SourceFamilyId = mine2.FamilyId OR c.TargetFamilyId = mine2.FamilyId)
+                    WHERE (c.SourceFamilyId = f.Id OR c.TargetFamilyId = f.Id)
+              )
+            ORDER BY f.Name
+            """,
+            new { UserId = userId, OtherUserId = otherUserId });
+        return rows.ToList();
+    }
+
+    /// <summary>
     /// Reverse view: families the current user owns/admins that could be
     /// connected toward <paramref name="otherUserId"/>'s families. Used to
     /// present the "Share [My family] with [Their family]" direction.

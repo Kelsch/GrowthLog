@@ -5,6 +5,7 @@
 @inject FamilyRepository Families
 @inject FamilyConnectionRepository Connections
 @inject SharingPermissionRepository Permissions
+@inject FamilyDiscoveryRepository Discovery
 @inject FamilyAuthorizationService Authz
 @inject AuthenticationStateProvider AuthState
 @inject NavigationManager Nav
@@ -101,27 +102,120 @@ else
     @if (_canManage)
     {
         <h3>Connect another family</h3>
-        <EditForm Model="_newConnection" OnValidSubmit="CreateConnection">
-            <div class="row g-2">
-                <div class="col-md-5">
-                    <InputSelect @bind-Value="_newConnection.TargetFamilyId" class="form-select">
-                        <option value="">— select family —</option>
-                        @foreach (var f in _otherFamilies)
+        <p class="text-muted">
+            Connecting a family does not grant visibility by itself. After the
+            connection exists, use the permission checkboxes above to choose
+            what the other family can see.
+        </p>
+
+        <h4>Families you already belong to</h4>
+        @if (_otherFamilies.Count == 0)
+        {
+            <p class="text-muted">You have no other families to connect.</p>
+        }
+        else
+        {
+            <EditForm Model="_newConnection" OnValidSubmit="CreateConnection">
+                <div class="row g-2">
+                    <div class="col-md-5">
+                        <InputSelect @bind-Value="_newConnection.TargetFamilyId" class="form-select">
+                            <option value="">— select family —</option>
+                            @foreach (var f in _otherFamilies)
+                            {
+                                <option value="@f.Id">@f.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="col-md-4">
+                        <InputText @bind-Value="_newConnection.Label" class="form-control"
+                                   placeholder="Label (e.g. My Parents)" />
+                    </div>
+                    <div class="col-md-3">
+                        <AntiforgeryToken />
+                        <button type="submit" class="btn btn-primary">Connect</button>
+                    </div>
+                </div>
+            </EditForm>
+        }
+
+        <h4 class="mt-4">Connect to a family through someone you share a family with</h4>
+        <p class="text-muted">
+            You can only connect to families owned by people who already share
+            at least one family membership with you. This keeps discovery
+            private — GrowthLog never lists families you have no relationship with.
+        </p>
+
+        @if (_coMembers.Count == 0)
+        {
+            <p class="text-muted">No co-members found.</p>
+        }
+        else
+        {
+            <div class="row g-2 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Person you share a family with</label>
+                    <select class="form-select" value="@_selectedCoMemberId" @onchange="OnCoMemberChanged">
+                        <option value="">— select person —</option>
+                        @foreach (var cm in _coMembers)
                         {
-                            <option value="@f.Id">@f.Name</option>
+                            <option value="@cm.UserId">
+                                @(string.IsNullOrWhiteSpace(cm.DisplayName) ? cm.Email : cm.DisplayName)
+                                @(string.IsNullOrWhiteSpace(cm.SharedFamilyNames) ? "" : $" (via {cm.SharedFamilyNames})")
+                            </option>
                         }
-                    </InputSelect>
-                </div>
-                <div class="col-md-4">
-                    <InputText @bind-Value="_newConnection.Label" class="form-control"
-                               placeholder="Label (e.g. My Parents)" />
-                </div>
-                <div class="col-md-3">
-                    <AntiforgeryToken />
-                    <button type="submit" class="btn btn-primary">Connect</button>
+                    </select>
                 </div>
             </div>
-        </EditForm>
+
+            @if (!string.IsNullOrEmpty(_selectedCoMemberId))
+            {
+                @if (_coMemberFamilies.Count == 0)
+                {
+                    <p class="text-muted">
+                        This person has no families you can connect to (you may already
+                        be a member of them, or a connection already exists).
+                    </p>
+                }
+                else
+                {
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label">Share my family</label>
+                            <select class="form-select" value="@_connectSourceFamilyId" @onchange="OnConnectSourceChanged">
+                                <option value="">— select my family —</option>
+                                @foreach (var f in _families!)
+                                {
+                                    <option value="@f.Id">@f.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">With their family</label>
+                            <select class="form-select" value="@_connectTargetFamilyId" @onchange="OnConnectTargetChanged">
+                                <option value="">— select their family —</option>
+                                @foreach (var f in _coMemberFamilies)
+                                {
+                                    <option value="@f.FamilyId">@f.FamilyName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="button" class="btn btn-primary"
+                                    disabled="@(!CanCreateCoMemberConnection)"
+                                    @onclick="CreateCoMemberConnection">
+                                Connect
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-muted mt-2">
+                        This creates a connection from <strong>your family</strong> (the
+                        source that owns the data) to <strong>their family</strong> (the
+                        target that receives visibility). No data is shared until you
+                        grant a permission above.
+                    </p>
+                }
+            }
+        }
     }
 }
 
@@ -135,6 +229,18 @@ else
     private string? _error;
     private readonly NewConnectionModel _newConnection = new();
 
+    // Co-member discovery (private: only people who share a family with me).
+    private List<CoMemberRow> _coMembers = new();
+    private List<ConnectableFamilyRow> _coMemberFamilies = new();
+    private string? _selectedCoMemberId;
+    private string? _connectSourceFamilyId;
+    private string? _connectTargetFamilyId;
+
+    private bool CanCreateCoMemberConnection
+        => !string.IsNullOrEmpty(_connectSourceFamilyId)
+           && !string.IsNullOrEmpty(_connectTargetFamilyId)
+           && _connectSourceFamilyId != _connectTargetFamilyId;
+
     protected override async Task OnInitializedAsync()
     {
         var state = await AuthState.GetAuthenticationStateAsync();
@@ -142,11 +248,60 @@ else
         if (_userId is null) return;
 
         _families = (await Families.GetForUserAsync(_userId)).ToList();
+        _coMembers = (await Discovery.GetCoMembersAsync(_userId)).ToList();
         if (_families.Count > 0)
         {
             _selectedFamilyId = _families[0].Id;
             await LoadAsync();
         }
+    }
+
+    private async Task OnCoMemberChanged(ChangeEventArgs e)
+    {
+        _selectedCoMemberId = e.Value?.ToString();
+        _connectSourceFamilyId = null;
+        _connectTargetFamilyId = null;
+        _coMemberFamilies = new();
+
+        if (_userId is null || string.IsNullOrEmpty(_selectedCoMemberId)) return;
+
+        _coMemberFamilies = (await Discovery.GetConnectableFamiliesForCoMemberAsync(
+            _userId, _selectedCoMemberId)).ToList();
+    }
+
+    private void OnConnectSourceChanged(ChangeEventArgs e)
+        => _connectSourceFamilyId = e.Value?.ToString();
+
+    private void OnConnectTargetChanged(ChangeEventArgs e)
+        => _connectTargetFamilyId = e.Value?.ToString();
+
+    private async Task CreateCoMemberConnection()
+    {
+        if (!_canManage || _userId is null) return;
+        if (!CanCreateCoMemberConnection) return;
+
+        // Defensive guard: never connect a family to itself.
+        if (_connectSourceFamilyId == _connectTargetFamilyId)
+        {
+            _error = "A family cannot be connected to itself.";
+            return;
+        }
+
+        _error = null;
+
+        await Connections.CreateAsync(
+            _connectSourceFamilyId!,
+            _connectTargetFamilyId!,
+            label: null,
+            createdByUserId: _userId);
+
+        // Reset the co-member picker so the new connection shows up in the
+        // "Connected families" table above (where permissions are granted).
+        _connectSourceFamilyId = null;
+        _connectTargetFamilyId = null;
+        _coMemberFamilies = new();
+
+        await LoadAsync();
     }
 
     private async Task OnFamilyChanged(ChangeEventArgs e)
