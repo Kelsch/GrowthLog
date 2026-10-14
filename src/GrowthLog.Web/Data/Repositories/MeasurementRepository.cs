@@ -4,6 +4,16 @@ using GrowthLog.Web.Models;
 
 namespace GrowthLog.Web.Data.Repositories;
 
+/// <summary>
+/// Authorization-scoped aggregate counts for the Dashboard summary strip.
+/// </summary>
+public class MeasurementSummary
+{
+    public int MeasurementCount { get; set; }
+    public string? EarliestDate { get; set; }
+    public string? LatestDate { get; set; }
+}
+
 public class MeasurementRepository
 {
     private readonly IDbConnectionFactory _factory;
@@ -29,6 +39,50 @@ public class MeasurementRepository
             """,
             new { UserId = userId });
         return rows.ToList();
+    }
+
+    /// <summary>
+    /// Returns the most recent measurements the user is authorized to see,
+    /// newest first, capped in SQL. This is the single source of truth for
+    /// Dashboard "Recent activity" — callers must not fetch a global list and
+    /// filter in the UI.
+    /// Authorization is enforced in SQL via VisiblePeopleSql.
+    /// </summary>
+    public async Task<IReadOnlyList<Measurement>> GetRecentVisibleForUserAsync(string userId, int limit = 10)
+    {
+        using var connection = _factory.Create();
+        var rows = await connection.QueryAsync<Measurement>($"""
+            SELECT m.*
+            FROM Measurements m
+            WHERE m.IsDeleted = 0
+              AND m.PersonId IN ({FamilyAuthorizationService.VisiblePeopleSql})
+            ORDER BY m.MeasurementDate DESC
+            LIMIT @Limit
+            """,
+            new { UserId = userId, Limit = limit });
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// Returns authorization-scoped aggregate counts for the Dashboard summary
+    /// strip: number of measurements and the earliest/latest measurement dates
+    /// across people the user is allowed to see. Enforced in SQL so summary
+    /// counts can never include other families' data.
+    /// </summary>
+    public async Task<MeasurementSummary> GetVisibleSummaryAsync(string userId)
+    {
+        using var connection = _factory.Create();
+        var row = await connection.QuerySingleAsync<MeasurementSummary>($"""
+            SELECT
+                COUNT(1) AS MeasurementCount,
+                MIN(m.MeasurementDate) AS EarliestDate,
+                MAX(m.MeasurementDate) AS LatestDate
+            FROM Measurements m
+            WHERE m.IsDeleted = 0
+              AND m.PersonId IN ({FamilyAuthorizationService.VisiblePeopleSql})
+            """,
+            new { UserId = userId });
+        return row;
     }
 
     /// <summary>
