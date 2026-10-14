@@ -113,8 +113,14 @@ public class PersonRepository
     /// Returns every person the user can see, together with the family they
     /// belong to and whether that visibility comes from a sharing connection
     /// (i.e. the user is not a member of that family).
-    /// This is the query the People list uses so that shared people from
-    /// connected families are surfaced for every member of the receiving family.
+    ///
+    /// This is the query the People list, Home "Shared with me", and Compare
+    /// all use. Visibility is enforced entirely by
+    /// <see cref="FamilyAuthorizationService.VisiblePeopleSql"/>, which
+    /// applies the ViewChildren / ViewAdults / ViewAll kind filter for shared
+    /// families. A person in a shared family is returned only if the granted
+    /// permission kind matches their MembershipKind (Child / Adult), or if
+    /// ViewAll is granted.
     /// </summary>
     public async Task<IReadOnlyList<VisiblePersonRow>> GetVisiblePeopleWithFamilyAsync(string userId)
     {
@@ -150,6 +156,11 @@ public class PersonRepository
     /// the given family (i.e. the given family is the Target of a
     /// FamilyConnection with a granted SharingPermission). Used by the family
     /// detail page so every member of the receiving family sees shared people.
+    ///
+    /// The kind filter (ViewChildren / ViewAdults / ViewAll) is applied by
+    /// <see cref="FamilyAuthorizationService.VisiblePeopleSql"/>; the extra
+    /// predicate here only narrows to the specific target family. This keeps
+    /// the family detail page consistent with Home and Compare.
     /// </summary>
     public async Task<IReadOnlyList<VisiblePersonRow>> GetSharedIntoFamilyAsync(string userId, string targetFamilyId)
     {
@@ -178,16 +189,8 @@ public class PersonRepository
             JOIN FamilyMemberships fm
                 ON fm.FamilyId = c.TargetFamilyId
                AND fm.UserId = @UserId
-            JOIN SharingPermissions sp
-                ON sp.FamilyConnectionId = c.Id
-               AND sp.IsGranted = 1
             WHERE p.IsDeleted = 0
               AND p.Id IN ({FamilyAuthorizationService.VisiblePeopleSql})
-              AND (
-                    sp.PermissionKind = 'ViewAll'
-                 OR (sp.PermissionKind = 'ViewChildren' AND pfm.MembershipKind = 'Child')
-                 OR (sp.PermissionKind = 'ViewAdults'   AND pfm.MembershipKind = 'Adult')
-              )
             ORDER BY f.Name, p.FirstName, p.LastName
             """,
             new { UserId = userId, TargetFamilyId = targetFamilyId });

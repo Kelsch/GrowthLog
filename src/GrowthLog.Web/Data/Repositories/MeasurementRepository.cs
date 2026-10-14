@@ -46,7 +46,13 @@ public class MeasurementRepository
     /// newest first, capped in SQL. This is the single source of truth for
     /// Dashboard "Recent activity" — callers must not fetch a global list and
     /// filter in the UI.
-    /// Authorization is enforced in SQL via VisiblePeopleSql.
+    ///
+    /// Authorization is enforced in SQL via
+    /// <see cref="FamilyAuthorizationService.VisiblePeopleSql"/>, which
+    /// applies the ViewChildren / ViewAdults / ViewAll kind filter for shared
+    /// families. Measurements for a person in a shared family are returned
+    /// only if the granted permission kind matches that person's
+    /// MembershipKind (or ViewAll is granted).
     /// </summary>
     public async Task<IReadOnlyList<Measurement>> GetRecentVisibleForUserAsync(string userId, int limit = 10)
     {

@@ -127,6 +127,57 @@ public class FamilyAuthorizationService
           )
         """;
 
+    /// <summary>
+    /// SQL fragment that yields the IDs of families the user can see *via a
+    /// sharing connection* (i.e. families the user is NOT a member of, but
+    /// which are the Source of an active FamilyConnection whose Target family
+    /// the user belongs to, and where at least one SharingPermission is
+    /// granted that yields at least one visible person).
+    ///
+    /// This is the ONLY correct way to build a "shared families" list. It
+    /// reuses the same kind-aware predicate as VisiblePeopleSql rule 4, so a
+    /// family with only ViewChildren granted will appear here only if it
+    /// actually has at least one Child member; a family with no granted
+    /// permission will not appear at all.
+    ///
+    /// Direction convention (matches FamilyConnection):
+    ///   SourceFamilyId = the family that OWNS the data being shared out.
+    ///   TargetFamilyId = the family that RECEIVES visibility.
+    /// </summary>
+    public const string SharedFamiliesSql = """
+        SELECT DISTINCT f.Id
+        FROM Families f
+        WHERE f.IsDeleted = 0
+          -- The user is NOT a direct member of this family.
+          AND NOT EXISTS (
+                SELECT 1 FROM FamilyMemberships mine
+                WHERE mine.FamilyId = f.Id AND mine.UserId = @UserId
+          )
+          -- This family is the Source of an active connection whose Target
+          -- family the user belongs to, and that connection has at least one
+          -- granted permission that yields at least one visible person.
+          AND EXISTS (
+                SELECT 1
+                FROM FamilyConnections c
+                JOIN FamilyMemberships fm2
+                    ON fm2.FamilyId = c.TargetFamilyId
+                   AND fm2.UserId = @UserId
+                JOIN SharingPermissions sp
+                    ON sp.FamilyConnectionId = c.Id
+                   AND sp.IsGranted = 1
+                JOIN PersonFamilyMembership pfm
+                    ON pfm.FamilyId = c.SourceFamilyId
+                   AND pfm.IsActive = 1
+                WHERE c.SourceFamilyId = f.Id
+                  AND c.IsActive = 1
+                  AND (
+                        sp.PermissionKind = 'ViewAll'
+                     OR (sp.PermissionKind = 'ViewChildren' AND pfm.MembershipKind = 'Child')
+                     OR (sp.PermissionKind = 'ViewAdults'   AND pfm.MembershipKind = 'Adult')
+                  )
+          )
+        """;
+
     public async Task<bool> CanViewPersonAsync(string userId, string personId)
     {
         using var connection = _factory.Create();

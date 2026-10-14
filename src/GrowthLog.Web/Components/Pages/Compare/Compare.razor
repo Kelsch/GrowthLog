@@ -23,8 +23,13 @@ else
         {
             <button type="button"
                     class="filter-chip @(_selectedFamilyIds.Contains(f.Id) ? "active" : "")"
+                    title="@(f.IsShared ? $"{f.Name} (shared with you)" : f.Name)"
                     @onclick="() => ToggleFamilyChip(f.Id)">
                 @f.Name
+                @if (f.IsShared)
+                {
+                    <span class="chip-shared-badge" aria-label="shared with you">shared</span>
+                }
             </button>
         }
     </div>
@@ -244,7 +249,7 @@ else
     private double _selectedAge = 10;
     private bool _showDetails;
 
-    private List<Family> _families = new();
+    private List<VisibleFamilyRow> _families = new();
 
     // PersonId -> set of family IDs that person belongs to (from the
     // authorization-aware visible-people query).
@@ -279,7 +284,13 @@ else
         var user = await UserManager.FindByIdAsync(_userId);
         _unitSystem = UnitConverter.NormalizeUnitSystem(user?.PreferredUnitSystem);
 
-        _families = (await Families.GetForUserAsync(_userId)).ToList();
+        // Use the same visibility rule as Home's "Shared with me": families
+        // the user belongs to PLUS families shared into them via an active
+        // FamilyConnection with a granted SharingPermission that yields at
+        // least one visible person (kind-aware: ViewChildren / ViewAdults /
+        // ViewAll). Membership-only would hide shared families from Compare
+        // even though Home shows them.
+        _families = (await Families.GetVisibleForUserAsync(_userId)).ToList();
         foreach (var f in _families) _selectedFamilyIds.Add(f.Id);
 
         var rows = (await People.GetVisiblePeopleWithFamilyAsync(_userId)).ToList();
@@ -666,5 +677,17 @@ else
 
     .same-age-missing-list li {
         margin: 0.15rem 0;
+    }
+
+    .chip-shared-badge {
+        margin-left: 0.35rem;
+        padding: 0.05rem 0.35rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        border-radius: 0.5rem;
+        background: rgba(255, 255, 255, 0.25);
+        color: inherit;
     }
 </style>

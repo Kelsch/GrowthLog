@@ -5,8 +5,13 @@ namespace GrowthLog.Web.Data.Charts;
 
 /// <summary>
 /// Builds chart series from measurements, enforcing the same authorization
-/// rules as the rest of the app. Every query embeds VisiblePeopleSql so the
-/// database only returns people the user is allowed to see.
+/// rules as the rest of the app. Every query embeds
+/// <see cref="FamilyAuthorizationService.VisiblePeopleSql"/>, which applies
+/// the ViewChildren / ViewAdults / ViewAll kind filter for shared families.
+/// A person in a shared family is included only if the granted permission
+/// kind matches their MembershipKind (or ViewAll is granted). The optional
+/// personIds / familyIds arguments can only narrow the authorized set —
+/// they can never widen it.
 /// </summary>
 public class ChartDataService
 {
