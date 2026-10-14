@@ -105,6 +105,32 @@ public class MeasurementRepository
     }
 
     /// <summary>
+    /// Returns the latest measurement date per person across every person the
+    /// user is authorized to see. Used by the Dashboard "upcoming measurements"
+    /// calculation so it never has to load the full measurement history.
+    /// Authorization is enforced in SQL via VisiblePeopleSql.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, string>> GetLatestDatePerVisiblePersonAsync(string userId)
+    {
+        using var connection = _factory.Create();
+        var rows = await connection.QueryAsync<(string PersonId, string MaxDate)>($"""
+            SELECT m.PersonId, MAX(m.MeasurementDate) AS MaxDate
+            FROM Measurements m
+            WHERE m.IsDeleted = 0
+              AND m.PersonId IN ({FamilyAuthorizationService.VisiblePeopleSql})
+            GROUP BY m.PersonId
+            """,
+            new { UserId = userId });
+
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var row in rows)
+        {
+            result[row.PersonId] = row.MaxDate;
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Returns the latest measurement per person for the given people, but
     /// only for people the user is authorized to see. Used by family member
     /// rows to show latest height/weight without N+1 queries.

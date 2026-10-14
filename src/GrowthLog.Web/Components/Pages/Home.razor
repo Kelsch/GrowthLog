@@ -388,7 +388,8 @@ else
     private Person? _dialogPerson;
     private string? _userId;
     private List<VisiblePersonRow> _visibleRows = new();
-    private List<Measurement> _allMeasurements = new();
+    private MeasurementSummary _summary = new();
+    private Dictionary<string, string> _lastMeasurementByPerson = new(StringComparer.Ordinal);
 
     private bool _showAllUpcoming;
     private bool _showAllRecent;
@@ -436,24 +437,16 @@ else
 
     private int _peopleCount => _visibleRows.Select(r => r.Id).Distinct(StringComparer.Ordinal).Count();
 
-    private int _measurementCount => _allMeasurements.Count;
+    private int _measurementCount => _summary.MeasurementCount;
 
     private string _yearsTrackingText
     {
         get
         {
-            if (_allMeasurements.Count == 0) return "—";
+            if (_summary.MeasurementCount == 0) return "—";
+            if (!DateOnly.TryParse(_summary.EarliestDate, out var earliest)) return "—";
+            if (!DateOnly.TryParse(_summary.LatestDate, out var latest)) return "—";
 
-            var dates = _allMeasurements
-                .Select(m => DateOnly.TryParse(m.MeasurementDate, out var d) ? d : (DateOnly?)null)
-                .Where(d => d is not null)
-                .Select(d => d!.Value)
-                .ToList();
-
-            if (dates.Count == 0) return "—";
-
-            var earliest = dates.Min();
-            var latest = dates.Max();
             var years = (latest.DayNumber - earliest.DayNumber) / 365.25;
 
             if (years < 1)
@@ -541,13 +534,12 @@ else
             .OrderBy(n => n)
             .ToList();
 
-        // Recent measurements (authorization-aware).
-        _allMeasurements = (await Measurements.GetVisibleForUserAsync(_userId)).ToList();
         var peopleById = _visibleRows.GroupBy(r => r.Id).ToDictionary(g => g.Key, g => g.First());
 
-        _recent = _allMeasurements
-            .OrderByDescending(m => m.MeasurementDate)
-            .Take(10)
+        // Recent activity: authorization-aware, capped in SQL. Never load the
+        // full measurement set and slice it in the UI.
+        var recent = await Measurements.GetRecentVisibleForUserAsync(_userId, 10);
+        _recent = recent
             .Select(m => new RecentRow
             {
                 PersonId = m.PersonId,
@@ -558,11 +550,15 @@ else
             })
             .ToList();
 
+        // Summary aggregates: authorization-aware, computed in SQL.
+        _summary = await Measurements.GetVisibleSummaryAsync(_userId);
+
         // Upcoming / due / overdue measurements for every visible person.
+        // Only the latest date per person is needed — not the full history.
         var today = DateOnly.FromDateTime(DateTime.Today);
-        var lastByPerson = _allMeasurements
-            .GroupBy(m => m.PersonId)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(m => m.MeasurementDate).First().MeasurementDate);
+        _lastMeasurementByPerson = new Dictionary<string, string>(
+            await Measurements.GetLatestDatePerVisiblePersonAsync(_userId),
+            StringComparer.Ordinal);
 
         _upcoming = new();
         foreach (var p in peopleById.Values)
@@ -571,7 +567,7 @@ else
 
             var due = MeasurementDueCalculator.Evaluate(
                 dob,
-                lastByPerson.TryGetValue(p.Id, out var d) ? d : null,
+                _lastMeasurementByPerson.TryGetValue(p.Id, out var d) ? d : null,
                 today);
 
             // Only surface people who are not already measured this year.
