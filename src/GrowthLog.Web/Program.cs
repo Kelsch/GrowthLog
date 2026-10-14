@@ -51,6 +51,7 @@ builder.Services.AddScoped<PersonFamilyMembershipRepository>();
 builder.Services.AddScoped<AuditRepository>();
 builder.Services.AddScoped<MeasurementRepository>();
 builder.Services.AddScoped<FamilyConnectionRepository>();
+builder.Services.AddScoped<FamilyDiscoveryRepository>();
 builder.Services.AddScoped<SharingPermissionRepository>();
 builder.Services.AddScoped<InvitationRepository>();
 builder.Services.AddScoped<FamilyAuthorizationService>();
