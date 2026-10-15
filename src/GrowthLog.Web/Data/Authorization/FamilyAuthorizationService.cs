@@ -104,6 +104,15 @@ public class FamilyAuthorizationService
             -- Rule 4: person is in a Source family of an active connection
             -- whose Target family the user belongs to, and that connection
             -- has a granted permission matching the person's membership kind.
+            --
+            -- A FamilyConnection alone NEVER grants visibility. Visibility
+            -- requires an effective grant: a SharingPermissions row with
+            -- IsGranted = 1 for the matching kind, AND no later row for the
+            -- same (connection, kind) with IsGranted = 0. The "no later
+            -- revoke" check makes this correct even if the unique index on
+            -- (FamilyConnectionId, PermissionKind) is missing and duplicate
+            -- rows accumulate — a stale IsGranted = 1 row can never win over
+            -- a newer IsGranted = 0 row.
             OR EXISTS (
                 SELECT 1
                 FROM PersonFamilyMembership pfm2
@@ -122,6 +131,15 @@ public class FamilyAuthorizationService
                         sp.PermissionKind = 'ViewAll'
                      OR (sp.PermissionKind = 'ViewChildren' AND pfm2.MembershipKind = 'Child')
                      OR (sp.PermissionKind = 'ViewAdults'   AND pfm2.MembershipKind = 'Adult')
+                  )
+                  -- No newer revoke for the same (connection, kind).
+                  AND NOT EXISTS (
+                        SELECT 1
+                        FROM SharingPermissions sp2
+                        WHERE sp2.FamilyConnectionId = sp.FamilyConnectionId
+                          AND sp2.PermissionKind = sp.PermissionKind
+                          AND sp2.IsGranted = 0
+                          AND sp2.UpdatedUtc > sp.UpdatedUtc
                   )
             )
           )
@@ -155,7 +173,13 @@ public class FamilyAuthorizationService
           )
           -- This family is the Source of an active connection whose Target
           -- family the user belongs to, and that connection has at least one
-          -- granted permission that yields at least one visible person.
+          -- *effective* granted permission that yields at least one visible
+          -- person. A connection alone never makes the family visible.
+          --
+          -- "Effective" means: a SharingPermissions row with IsGranted = 1
+          -- for the matching kind, AND no later row for the same
+          -- (connection, kind) with IsGranted = 0. This is robust even if
+          -- duplicate permission rows exist.
           AND EXISTS (
                 SELECT 1
                 FROM FamilyConnections c
@@ -174,6 +198,15 @@ public class FamilyAuthorizationService
                         sp.PermissionKind = 'ViewAll'
                      OR (sp.PermissionKind = 'ViewChildren' AND pfm.MembershipKind = 'Child')
                      OR (sp.PermissionKind = 'ViewAdults'   AND pfm.MembershipKind = 'Adult')
+                  )
+                  -- No newer revoke for the same (connection, kind).
+                  AND NOT EXISTS (
+                        SELECT 1
+                        FROM SharingPermissions sp2
+                        WHERE sp2.FamilyConnectionId = sp.FamilyConnectionId
+                          AND sp2.PermissionKind = sp.PermissionKind
+                          AND sp2.IsGranted = 0
+                          AND sp2.UpdatedUtc > sp.UpdatedUtc
                   )
           )
         """;
