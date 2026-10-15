@@ -5,7 +5,6 @@
 @inject FamilyRepository Families
 @inject PersonRepository People
 @inject MeasurementRepository Measurements
-@inject GrowthLog.Web.Data.Charts.ChartDataService Charts
 @inject AuthenticationStateProvider AuthState
 @inject UserManager<ApplicationUser> UserManager
 
@@ -54,199 +53,10 @@ else
             <a class="btn btn-sm btn-outline-secondary" href="compare">Open full compare</a>
         </div>
 
-        @if (_chartFamilies.Count > 0)
-        {
-            <div class="chart-family-chips">
-                @foreach (var f in _chartFamilies)
-                {
-                    <button type="button"
-                            class="filter-chip @(_selectedFamilyId == f.Id ? "active" : "")"
-                            title="@(f.IsShared ? $"{f.Name} (shared with you)" : f.Name)"
-                            @onclick="() => SelectFamily(f.Id)">
-                        @f.Name
-                        @if (f.IsShared)
-                        {
-                            <span class="chip-shared-badge" aria-label="shared with you">shared</span>
-                        }
-                    </button>
-                }
-            </div>
-        }
-
-        <div class="chart-toolbar">
-            <div class="chart-metric-toggle">
-                <button type="button"
-                        class="filter-chip @(_chartMetric == ChartMetrics.Height ? "active" : "")"
-                        @onclick='() => SetMetric(ChartMetrics.Height)'>
-                    Height
-                </button>
-                <button type="button"
-                        class="filter-chip @(_chartMetric == ChartMetrics.Weight ? "active" : "")"
-                        @onclick='() => SetMetric(ChartMetrics.Weight)'>
-                    Weight
-                </button>
-                <button type="button"
-                        class="filter-chip @(_chartMetric == MetricModes.Both ? "active" : "")"
-                        @onclick='() => SetMetric(MetricModes.Both)'>
-                    Both
-                </button>
-            </div>
-
-        </div>
-
-        <div class="same-age-controls mb-3">
-                <label class="form-label" for="dash-age-slider">Age (years)</label>
-                <div class="same-age-controls-row">
-                    <input id="dash-age-slider" type="range"
-                           min="@MinAge" max="@MaxAge" step="1"
-                           value="@_selectedAge"
-                           @oninput="OnAgeSliderChanged" />
-                    <input type="number" class="form-control same-age-number"
-                           min="@MinAge" max="@MaxAge" step="1"
-                           value="@_selectedAge"
-                           @oninput="OnAgeNumberChanged" />
-                </div>
-                <p class="text-muted">Nearest actual measurement within ±6 months of the selected age. Missing values are not interpolated.</p>
-            </div>
-
-            @if (_barRows.Count == 0)
-            {
-                <EmptyState Icon="📊"
-                            Title="No measurements to compare yet."
-                            Description="Add a measurement for someone in this family to see the comparison." />
-            }
-            else
-            {
-                @if (_chartMetric == MetricModes.Both)
-                {
-                    <div class="both-chart">
-                        <div class="both-chart-axis-row">
-                            <span class="both-chart-axis-label both-chart-axis-left">Height (@(_unitSystem == "Metric" ? "cm" : "ft-in"))</span>
-                            <span class="both-chart-axis-label both-chart-axis-right">Weight (@(_unitSystem == "Metric" ? "kg" : "lb"))</span>
-                        </div>
-                        <div class="chart-scroll">
-                        @* Bars and the weight overlay share one scrolling surface
-                           so they move together and stay aligned when the chart
-                           scrolls sideways on narrow screens. *@
-                        <div class="chart-surface" @onclick="ClearSelection">
-                        <div class="both-chart-plot">
-                            @foreach (var row in _barRows)
-                            {
-                                <div class="both-chart-col @(_selectedPersonId == row.PersonId ? "both-chart-col-selected" : "")"
-                                     title="@TooltipFor(row)"
-                                     @onclick="() => SelectBar(row.PersonId)"
-                                     @onclick:stopPropagation="true">
-                                    <div class="both-chart-value">@FormatValue(row.HeightValue ?? 0)</div>
-                                    <div class="both-chart-track">
-                                        <div class="both-chart-bar"
-                                             style="height:@(BarHeightPercent(row.HeightValue ?? 0, _barMaxHeight).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;background:@ColorFor(row.PersonId)">
-                                        </div>
-                                    </div>
-                                    <div class="both-chart-name" title="@row.PersonName">@row.FirstName</div>
-                                </div>
-                            }
-                        </div>
-                        @* Weight overlay. The connecting line is drawn in an SVG
-                           that stretches with the plot (lines don't distort), while
-                           the markers are HTML dots positioned by percentage so they
-                           stay perfectly circular at any width. Missing weights are
-                           simply omitted (gap in the line). *@
-                        <svg class="both-chart-line"
-                             viewBox="0 0 @BothPlotWidth @BothPlotHeight"
-                             preserveAspectRatio="none">
-                            @if (_weightLinePoints.Length > 1)
-                            {
-                                <polyline fill="none" stroke="#dc2626" stroke-width="2"
-                                          stroke-linejoin="round" stroke-linecap="round"
-                                          points="@_weightLinePoints" />
-                            }
-                        </svg>
-                        @foreach (var pt in _weightLineDots)
-                        {
-                            <span class="both-chart-dot"
-                                  style="left:@(pt.LeftPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;top:@(pt.TopPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%"></span>
-                        }
-                        @* Weight value labels, positioned in the same pixel space
-                           as the overlay so they sit just above each marker. *@
-                        @foreach (var lbl in _weightLabels)
-                        {
-                            <span class="both-chart-weight-label"
-                                  style="left:@(lbl.LeftPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;top:@(lbl.TopPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%">
-                                @lbl.Text
-                            </span>
-                        }
-                        </div>
-                        </div>
-                    </div>
-
-                    @* Tap/click readout. On phones the per-bar value labels are
-                       hidden, so this panel shows the exact values for the
-                       selected person in the preferred units. *@
-                    @if (_selectedBarRow is not null)
-                    {
-                        <div class="chart-readout" role="status">
-                            <div class="chart-readout-name">@_selectedBarRow.PersonName</div>
-                            <div class="chart-readout-values">
-                                <span class="chart-readout-item">
-                                    <span class="chart-readout-label">Height</span>
-                                    <span class="chart-readout-value">
-                                        @(_selectedBarRow.HeightValue is null
-                                            ? "—"
-                                            : UnitConverter.FormatHeight(_selectedBarRow.HeightValue, _unitSystem))
-                                    </span>
-                                </span>
-                                <span class="chart-readout-item">
-                                    <span class="chart-readout-label">Weight</span>
-                                    <span class="chart-readout-value">
-                                        @(_selectedBarRow.WeightValue is null
-                                            ? "—"
-                                            : UnitConverter.FormatWeight(_selectedBarRow.WeightValue, _unitSystem))
-                                    </span>
-                                </span>
-                            </div>
-                            <div class="chart-readout-context">Age @_selectedAge.ToString("0.#")</div>
-                        </div>
-                    }
-                    else
-                    {
-                        <p class="chart-readout-hint text-muted">Tap a bar to see exact height and weight.</p>
-                    }
-                }
-                else
-                {
-                    <div class="vbar-chart">
-                        <div class="chart-scroll">
-                        <div class="vbar-plot">
-                            @foreach (var row in _barRows)
-                            {
-                                <div class="vbar-col" title="@TooltipFor(row)">
-                                    <div class="vbar-value">@FormatValue(row.Value!.Value)</div>
-                                    <div class="vbar-track">
-                                        <div class="vbar-bar"
-                                             style="height:@(BarHeightPercent(row.Value!.Value, _barMaxValue).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;background:@ColorFor(row.PersonId)">
-                                        </div>
-                                    </div>
-                                    <div class="vbar-name" title="@row.PersonName">@row.FirstName</div>
-                                </div>
-                            }
-                        </div>
-                        </div>
-                    </div>
-                }
-            }
-
-        @if (_missingBarRows.Count > 0)
-        {
-            <div class="same-age-missing-section">
-                <h3 class="same-age-missing-heading">No measurement near age @_selectedAge.ToString("0.#")</h3>
-                <ul class="same-age-missing-list">
-                    @foreach (var row in _missingBarRows)
-                    {
-                        <li>@row.PersonName</li>
-                    }
-                </ul>
-            </div>
-        }
+        @* The Dashboard embeds the same CompareGrowth component used by
+           /compare. There is no separate chart implementation here, so the
+           authorization and data-loading path is identical. *@
+        <CompareGrowth Compact="true" />
     </div>
 
     <div class="dashboard-two-col">
@@ -385,7 +195,6 @@ else
     private string _unitSystem = "Imperial";
     private string _displayName = "there";
     private List<Family> _ownFamilies = new();
-    private List<VisibleFamilyRow> _chartFamilies = new();
     private List<string> _sharedFamilies = new();
     private List<UpcomingRow> _upcoming = new();
     private List<RecentRow> _recent = new();
@@ -399,36 +208,8 @@ else
 
     private bool _showAllUpcoming;
     private bool _showAllRecent;
-    private IReadOnlyList<GrowthLog.Web.Data.Charts.ChartSeries> _snapshotSeries = new List<GrowthLog.Web.Data.Charts.ChartSeries>();
 
     private const int UpcomingWindowDays = 90;
-    private const int SnapshotMaxPeople = 5;
-    private const double AgeToleranceYears = 0.5; // ±6 months
-
-    private static class MetricModes
-    {
-        public const string Both = "Both";
-    }
-
-    private string _chartMetric = ChartMetrics.Height;
-    private string? _selectedFamilyId;
-    private string? _defaultFamilyId;
-    private double _selectedAge = 10;
-    private List<BarRow> _barRows = new();
-    private List<BarRow> _missingBarRows = new();
-    private double _barMaxValue = 1;
-    private double _barMaxHeight = 1;
-    private double _barMaxWeight = 1;
-    private string _weightLinePoints = string.Empty;
-    private List<WeightDot> _weightLineDots = new();
-    private List<WeightLabel> _weightLabels = new();
-    private string? _selectedPersonId;
-
-    // Pixel-space dimensions for the weight overlay. These match the CSS
-    // height of the plot area (bars only) so markers render as true circles
-    // and the line stays above the name row.
-    private const double BothPlotWidth = 1000;
-    private const double BothPlotHeight = 260;
 
     private string Greeting
     {
@@ -533,25 +314,11 @@ else
 
         _ownFamilies = (await Families.GetForUserAsync(_userId)).ToList();
 
-        // Chart family chips use the same visibility helper as Compare:
-        // membership families PLUS families shared into the user via an active
-        // FamilyConnection with an effective granted SharingPermission
-        // (kind-aware: ViewChildren / ViewAdults / ViewAll). A family with no
-        // granted permission never appears here, so it can never become a
-        // selectable chart source.
-        _chartFamilies = (await Families.GetVisibleForUserAsync(_userId)).ToList();
-
-        var visibleFamilyIds = _chartFamilies
-            .Select(f => f.Id)
-            .ToHashSet(StringComparer.Ordinal);
-
-        // Only keep people whose family is in the visible-family set. This is
-        // belt-and-braces on top of VisiblePeopleSql: even if a person row
-        // somehow came back for a family the user cannot see, it is dropped
-        // here. A FamilyConnection alone never grants access.
-        _visibleRows = (await People.GetVisiblePeopleWithFamilyAsync(_userId))
-            .Where(r => visibleFamilyIds.Contains(r.FamilyId))
-            .ToList();
+        // The chart is rendered by the shared CompareGrowth component, which
+        // applies the same visibility helper as /compare. Home only needs the
+        // visible people for the summary strip, upcoming list, and recent
+        // activity — all of which are authorization-aware.
+        _visibleRows = (await People.GetVisiblePeopleWithFamilyAsync(_userId)).ToList();
 
         _sharedFamilies = _visibleRows.Where(r => r.IsShared)
             .Select(r => r.FamilyName)
@@ -622,156 +389,7 @@ else
             .ThenBy(u => u.PersonName)
             .ToList();
 
-        // Default to the starred family when set; otherwise the first family.
-        // The selected family must be one of the chart-visible families, so a
-        // shared family with no granted permission can never be selected.
-        if (_selectedFamilyId is null || _chartFamilies.All(f => f.Id != _selectedFamilyId))
-        {
-            _selectedFamilyId = _defaultFamilyId is not null
-                                && _chartFamilies.Any(f => f.Id == _defaultFamilyId)
-                ? _defaultFamilyId
-                : _chartFamilies.FirstOrDefault()?.Id;
-        }
-
-        await LoadChartAsync();
     }
-
-    private async Task LoadChartAsync()
-    {
-        if (_userId is null) return;
-
-        // People in the selected family, ordered oldest -> youngest by DOB.
-        var familyPeople = _visibleRows
-            .Where(r => _selectedFamilyId is null || r.FamilyId == _selectedFamilyId)
-            .GroupBy(r => r.Id, StringComparer.Ordinal)
-            .Select(g => g.First())
-            .OrderBy(p => ParseDob(p.DateOfBirth))
-            .ToList();
-
-        var personIds = familyPeople.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
-
-        // The line chart shows a single metric; "Both" falls back to Height.
-        var lineMetric = _chartMetric == MetricModes.Both ? ChartMetrics.Height : _chartMetric;
-
-        _snapshotSeries = personIds.Count == 0
-            ? new List<GrowthLog.Web.Data.Charts.ChartSeries>()
-            : await Charts.GetSeriesAsync(_userId, lineMetric, personIds);
-
-        // Bar chart (by age) — nearest actual measurement within tolerance.
-        // For "Both" we need height and weight series separately.
-        IReadOnlyList<GrowthLog.Web.Data.Charts.ChartSeries> heightSeries = _snapshotSeries;
-        IReadOnlyList<GrowthLog.Web.Data.Charts.ChartSeries> weightSeries = _snapshotSeries;
-
-        if (_chartMetric == MetricModes.Both && personIds.Count > 0)
-        {
-            heightSeries = await Charts.GetSeriesAsync(_userId, ChartMetrics.Height, personIds);
-            weightSeries = await Charts.GetSeriesAsync(_userId, ChartMetrics.Weight, personIds);
-        }
-
-        var heightById = heightSeries.ToDictionary(s => s.PersonId, StringComparer.Ordinal);
-        var weightById = weightSeries.ToDictionary(s => s.PersonId, StringComparer.Ordinal);
-
-        var rows = new List<BarRow>();
-        foreach (var p in familyPeople)
-        {
-            double? height = NearestValue(heightById, p.Id, _selectedAge);
-            double? weight = NearestValue(weightById, p.Id, _selectedAge);
-
-            rows.Add(new BarRow
-            {
-                PersonId = p.Id,
-                PersonName = p.FullName,
-                FirstName = p.FirstName,
-                Value = _chartMetric == ChartMetrics.Weight ? weight : height,
-                HeightValue = height,
-                WeightValue = weight
-            });
-        }
-
-        // Keep oldest -> youngest (familyPeople is already DOB-ordered).
-        if (_chartMetric == MetricModes.Both)
-        {
-            _barRows = rows.Where(r => r.HeightValue is not null || r.WeightValue is not null).ToList();
-            _missingBarRows = rows.Where(r => r.HeightValue is null && r.WeightValue is null).ToList();
-            _barMaxHeight = _barRows.Select(r => r.HeightValue ?? 0).DefaultIfEmpty(1).Max();
-            _barMaxWeight = _barRows.Select(r => r.WeightValue ?? 0).DefaultIfEmpty(1).Max();
-            BuildWeightLine();
-        }
-        else
-        {
-            _barRows = rows.Where(r => r.Value is not null).ToList();
-            _missingBarRows = rows.Where(r => r.Value is null).ToList();
-            _barMaxValue = _barRows.Select(r => r.Value!.Value).DefaultIfEmpty(1).Max();
-            _weightLinePoints = string.Empty;
-            _weightLineDots = new();
-        }
-    }
-
-    /// <summary>
-    /// Builds the weight overlay line for "Both" mode. Coordinates are in a
-    /// pixel viewBox matching the plot area (bars only, above the name row):
-    /// X is the column center, Y is scaled to the weight axis (0 = top,
-    /// BothPlotHeight = baseline). Only actual measurements are plotted, so a
-    /// missing weight leaves a gap instead of dropping to the baseline.
-    /// </summary>
-    private void BuildWeightLine()
-    {
-        _weightLineDots = new();
-        _weightLabels = new();
-
-        var count = _barRows.Count;
-        if (count == 0 || _barMaxWeight <= 0)
-        {
-            _weightLinePoints = string.Empty;
-            return;
-        }
-
-        var pts = new List<string>();
-        for (var i = 0; i < count; i++)
-        {
-            var row = _barRows[i];
-            if (row.WeightValue is null) continue;
-
-            // Column centers: each column occupies 1/count of the width.
-            var x = (i + 0.5) * (BothPlotWidth / count);
-            var y = BothPlotHeight - (row.WeightValue.Value / _barMaxWeight * BothPlotHeight);
-            y = Math.Clamp(y, 0, BothPlotHeight);
-
-            pts.Add($"{x.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)},{y.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}");
-
-            // Markers and labels are positioned by percentage so they scale
-            // with the plot and stay circular on any screen width.
-            _weightLineDots.Add(new WeightDot
-            {
-                LeftPercent = x / BothPlotWidth * 100.0,
-                TopPercent = y / BothPlotHeight * 100.0
-            });
-
-            _weightLabels.Add(new WeightLabel
-            {
-                Text = UnitConverter.FormatWeight(row.WeightValue, _unitSystem),
-                LeftPercent = x / BothPlotWidth * 100.0,
-                TopPercent = Math.Max(0, (y - 18) / BothPlotHeight * 100.0)
-            });
-        }
-
-        _weightLinePoints = string.Join(" ", pts);
-    }
-
-    private static double? NearestValue(
-        IReadOnlyDictionary<string, GrowthLog.Web.Data.Charts.ChartSeries> byId,
-        string personId,
-        double age)
-    {
-        if (!byId.TryGetValue(personId, out var s)) return null;
-        return s.Points
-            .Where(pt => Math.Abs(pt.AgeYears - age) <= AgeToleranceYears)
-            .OrderBy(pt => Math.Abs(pt.AgeYears - age))
-            .FirstOrDefault()?.Y;
-    }
-
-    private static DateOnly ParseDob(string dob)
-        => DateOnly.TryParse(dob, out var d) ? d : DateOnly.MaxValue;
 
     private void OpenAddFromDashboard()
     {
@@ -811,137 +429,6 @@ else
         await LoadAsync();
     }
 
-    private async Task SelectFamily(string familyId)
-    {
-        _selectedFamilyId = familyId;
-        _selectedPersonId = null;
-        await LoadChartAsync();
-    }
-
-    private void SelectBar(string personId)
-    {
-        // Tapping the same bar again clears the selection.
-        _selectedPersonId = _selectedPersonId == personId ? null : personId;
-    }
-
-    private void ClearSelection() => _selectedPersonId = null;
-
-    private BarRow? _selectedBarRow
-        => _selectedPersonId is null
-            ? null
-            : _barRows.FirstOrDefault(r => r.PersonId == _selectedPersonId);
-
-    private async Task SetMetric(string metric)
-    {
-        _chartMetric = metric;
-        _selectedPersonId = null;
-        await LoadChartAsync();
-    }
-
-
-    private async Task OnAgeSliderChanged(ChangeEventArgs e)
-    {
-        if (double.TryParse(e.Value?.ToString(), out var v))
-        {
-            _selectedAge = Math.Clamp(v, MinAge, MaxAge);
-            _selectedPersonId = null;
-            await LoadChartAsync();
-        }
-    }
-
-    private async Task OnAgeNumberChanged(ChangeEventArgs e)
-    {
-        if (double.TryParse(e.Value?.ToString(), out var v))
-        {
-            _selectedAge = Math.Clamp(v, MinAge, MaxAge);
-            _selectedPersonId = null;
-            await LoadChartAsync();
-        }
-    }
-
-    private double MinAge => 0;
-
-    private double MaxAge
-    {
-        get
-        {
-            var max = _snapshotSeries.SelectMany(s => s.Points)
-                .Select(p => p.AgeYears)
-                .DefaultIfEmpty(18)
-                .Max();
-            return Math.Max(1, Math.Ceiling(max));
-        }
-    }
-
-    private string FormatValue(double v)
-        => _chartMetric == ChartMetrics.Weight
-            ? UnitConverter.FormatWeight(v, _unitSystem)
-            : UnitConverter.FormatHeight(v, _unitSystem);
-
-    private string TooltipFor(BarRow row)
-    {
-        var age = _selectedAge.ToString("0.#");
-        var lines = new List<string> { row.PersonName, $"Age {age}" };
-
-        if (_chartMetric == MetricModes.Both)
-        {
-            if (row.HeightValue is not null)
-                lines.Add($"Height: {UnitConverter.FormatHeight(row.HeightValue, _unitSystem)}");
-            if (row.WeightValue is not null)
-                lines.Add($"Weight: {UnitConverter.FormatWeight(row.WeightValue, _unitSystem)}");
-        }
-        else if (row.Value is not null)
-        {
-            lines.Add(_chartMetric == ChartMetrics.Weight
-                ? $"Weight: {UnitConverter.FormatWeight(row.Value, _unitSystem)}"
-                : $"Height: {UnitConverter.FormatHeight(row.Value, _unitSystem)}");
-        }
-
-        return string.Join("\n", lines);
-    }
-
-    private static double BarHeightPercent(double value, double max)
-    {
-        if (max <= 0) return 0;
-        return Math.Max(2, value / max * 100);
-    }
-
-    private static readonly string[] Palette =
-    {
-        "#1d4ed8", "#dc2626", "#15803d", "#b45309", "#7e22ce",
-        "#0e7490", "#be185d", "#4d7c0f", "#c2410c", "#4338ca"
-    };
-
-    private static string ColorFor(string personId)
-    {
-        var hash = 0;
-        foreach (var c in personId) hash = (hash * 31 + c) & 0x7fffffff;
-        return Palette[hash % Palette.Length];
-    }
-
-    private class BarRow
-    {
-        public string PersonId { get; set; } = string.Empty;
-        public string PersonName { get; set; } = string.Empty;
-        public string FirstName { get; set; } = string.Empty;
-        public double? Value { get; set; }
-        public double? HeightValue { get; set; }
-        public double? WeightValue { get; set; }
-    }
-
-    private class WeightDot
-    {
-        public double LeftPercent { get; set; }
-        public double TopPercent { get; set; }
-    }
-
-    private class WeightLabel
-    {
-        public string Text { get; set; } = string.Empty;
-        public double LeftPercent { get; set; }
-        public double TopPercent { get; set; }
-    }
-
     private class UpcomingRow
     {
         public string PersonId { get; set; } = string.Empty;
@@ -965,16 +452,3 @@ else
     }
 }
 
-<style>
-    .chip-shared-badge {
-        margin-left: 0.35rem;
-        padding: 0.05rem 0.35rem;
-        font-size: 0.7rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.02em;
-        border-radius: 0.5rem;
-        background: rgba(255, 255, 255, 0.25);
-        color: inherit;
-    }
-</style>

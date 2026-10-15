@@ -115,6 +115,9 @@ public class FamilyAuthorizationService
             -- toggles land in the same millisecond. This is correct even if
             -- duplicate rows exist for the same (connection, kind) — a stale
             -- IsGranted = 1 row can never win over a newer IsGranted = 0 row.
+            --
+            -- The PermissionKind is also constrained to the three known kinds
+            -- so an unknown/stale kind can never accidentally match.
             OR EXISTS (
                 SELECT 1
                 FROM PersonFamilyMembership pfm2
@@ -127,6 +130,7 @@ public class FamilyAuthorizationService
                 JOIN SharingPermissions sp
                     ON sp.FamilyConnectionId = c.Id
                    AND sp.IsGranted = 1
+                   AND sp.PermissionKind IN ('ViewChildren', 'ViewAdults', 'ViewAll')
                 WHERE pfm2.PersonId = p.Id
                   AND pfm2.IsActive = 1
                   AND (
@@ -182,6 +186,9 @@ public class FamilyAuthorizationService
           -- (connection, kind) pair has IsGranted = 1. "Newest" is
           -- UpdatedUtc DESC, rowid DESC — rowid breaks same-millisecond ties.
           -- This is robust even if duplicate permission rows exist.
+          --
+          -- The PermissionKind is constrained to the three known kinds so an
+          -- unknown/stale kind can never accidentally match.
           AND EXISTS (
                 SELECT 1
                 FROM FamilyConnections c
@@ -191,6 +198,7 @@ public class FamilyAuthorizationService
                 JOIN SharingPermissions sp
                     ON sp.FamilyConnectionId = c.Id
                    AND sp.IsGranted = 1
+                   AND sp.PermissionKind IN ('ViewChildren', 'ViewAdults', 'ViewAll')
                 JOIN PersonFamilyMembership pfm
                     ON pfm.FamilyId = c.SourceFamilyId
                    AND pfm.IsActive = 1
