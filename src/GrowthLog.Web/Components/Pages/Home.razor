@@ -54,15 +54,20 @@ else
             <a class="btn btn-sm btn-outline-secondary" href="compare">Open full compare</a>
         </div>
 
-        @if (_ownFamilies.Count > 0)
+        @if (_chartFamilies.Count > 0)
         {
             <div class="chart-family-chips">
-                @foreach (var f in _ownFamilies)
+                @foreach (var f in _chartFamilies)
                 {
                     <button type="button"
                             class="filter-chip @(_selectedFamilyId == f.Id ? "active" : "")"
+                            title="@(f.IsShared ? $"{f.Name} (shared with you)" : f.Name)"
                             @onclick="() => SelectFamily(f.Id)">
                         @f.Name
+                        @if (f.IsShared)
+                        {
+                            <span class="chip-shared-badge" aria-label="shared with you">shared</span>
+                        }
                     </button>
                 }
             </div>
@@ -380,6 +385,7 @@ else
     private string _unitSystem = "Imperial";
     private string _displayName = "there";
     private List<Family> _ownFamilies = new();
+    private List<VisibleFamilyRow> _chartFamilies = new();
     private List<string> _sharedFamilies = new();
     private List<UpcomingRow> _upcoming = new();
     private List<RecentRow> _recent = new();
@@ -527,7 +533,26 @@ else
 
         _ownFamilies = (await Families.GetForUserAsync(_userId)).ToList();
 
-        _visibleRows = (await People.GetVisiblePeopleWithFamilyAsync(_userId)).ToList();
+        // Chart family chips use the same visibility helper as Compare:
+        // membership families PLUS families shared into the user via an active
+        // FamilyConnection with an effective granted SharingPermission
+        // (kind-aware: ViewChildren / ViewAdults / ViewAll). A family with no
+        // granted permission never appears here, so it can never become a
+        // selectable chart source.
+        _chartFamilies = (await Families.GetVisibleForUserAsync(_userId)).ToList();
+
+        var visibleFamilyIds = _chartFamilies
+            .Select(f => f.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // Only keep people whose family is in the visible-family set. This is
+        // belt-and-braces on top of VisiblePeopleSql: even if a person row
+        // somehow came back for a family the user cannot see, it is dropped
+        // here. A FamilyConnection alone never grants access.
+        _visibleRows = (await People.GetVisiblePeopleWithFamilyAsync(_userId))
+            .Where(r => visibleFamilyIds.Contains(r.FamilyId))
+            .ToList();
+
         _sharedFamilies = _visibleRows.Where(r => r.IsShared)
             .Select(r => r.FamilyName)
             .Distinct()
@@ -598,12 +623,14 @@ else
             .ToList();
 
         // Default to the starred family when set; otherwise the first family.
-        if (_selectedFamilyId is null || _ownFamilies.All(f => f.Id != _selectedFamilyId))
+        // The selected family must be one of the chart-visible families, so a
+        // shared family with no granted permission can never be selected.
+        if (_selectedFamilyId is null || _chartFamilies.All(f => f.Id != _selectedFamilyId))
         {
             _selectedFamilyId = _defaultFamilyId is not null
-                                && _ownFamilies.Any(f => f.Id == _defaultFamilyId)
+                                && _chartFamilies.Any(f => f.Id == _defaultFamilyId)
                 ? _defaultFamilyId
-                : _ownFamilies.FirstOrDefault()?.Id;
+                : _chartFamilies.FirstOrDefault()?.Id;
         }
 
         await LoadChartAsync();
