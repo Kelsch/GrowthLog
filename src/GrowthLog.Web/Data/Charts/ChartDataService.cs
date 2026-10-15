@@ -37,6 +37,43 @@ public class ChartDataService
 
         using var connection = _factory.Create();
 
+        // The family filter is intersected with the user's *visible* families
+        // (membership + kind-aware sharing) before it is used. This means a
+        // caller cannot widen visibility by passing a familyId the user has
+        // no granted permission for — the family is simply dropped from the
+        // filter, and the VisiblePeopleSql predicate below still excludes its
+        // people. A FamilyConnection alone never grants access.
+        HashSet<string>? familyFilter = null;
+        if (familyIds is { Count: > 0 })
+        {
+            var visibleFamilyIds = await connection.QueryAsync<string>($"""
+                SELECT f.Id
+                FROM Families f
+                WHERE f.IsDeleted = 0
+                  AND (
+                        EXISTS (
+                            SELECT 1 FROM FamilyMemberships fm
+                            WHERE fm.FamilyId = f.Id AND fm.UserId = @UserId
+                        )
+                     OR f.Id IN ({FamilyAuthorizationService.SharedFamiliesSql})
+                  )
+                """,
+                new { UserId = userId });
+
+            var visibleSet = new HashSet<string>(visibleFamilyIds, StringComparer.Ordinal);
+            familyFilter = new HashSet<string>(
+                familyIds.Where(id => visibleSet.Contains(id)),
+                StringComparer.Ordinal);
+
+            // If none of the requested families are visible, there is nothing
+            // to return — short-circuit so we never fall through to an
+            // unfiltered query.
+            if (familyFilter.Count == 0)
+            {
+                return Array.Empty<ChartSeries>();
+            }
+        }
+
         var rows = await connection.QueryAsync<SeriesRow>($"""
             SELECT
                 p.Id            AS PersonId,
@@ -61,9 +98,6 @@ public class ChartDataService
 
         var personFilter = personIds is { Count: > 0 }
             ? new HashSet<string>(personIds, StringComparer.Ordinal)
-            : null;
-        var familyFilter = familyIds is { Count: > 0 }
-            ? new HashSet<string>(familyIds, StringComparer.Ordinal)
             : null;
 
         var series = new Dictionary<string, ChartSeries>(StringComparer.Ordinal);

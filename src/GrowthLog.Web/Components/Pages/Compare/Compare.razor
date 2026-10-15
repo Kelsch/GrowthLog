@@ -293,15 +293,32 @@ else
         _families = (await Families.GetVisibleForUserAsync(_userId)).ToList();
         foreach (var f in _families) _selectedFamilyIds.Add(f.Id);
 
-        var rows = (await People.GetVisiblePeopleWithFamilyAsync(_userId)).ToList();
+        // Only keep people whose family is in the visible-family set. This is
+        // belt-and-braces on top of VisiblePeopleSql: even if a person row
+        // somehow came back for a family the user cannot see (e.g. a stale
+        // permission row), it is dropped here. A FamilyConnection alone never
+        // grants access — the family must be in _families, which is built
+        // from membership + kind-aware SharedFamiliesSql.
+        var visibleFamilyIds = _families
+            .Select(f => f.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var rows = (await People.GetVisiblePeopleWithFamilyAsync(_userId))
+            .Where(r => visibleFamilyIds.Contains(r.FamilyId))
+            .ToList();
 
         _personFamilies.Clear();
         _peopleById.Clear();
         foreach (var g in rows.GroupBy(r => r.Id, StringComparer.Ordinal))
         {
             var families = g.Select(r => r.FamilyId)
-                .Where(id => !string.IsNullOrEmpty(id))
+                .Where(id => !string.IsNullOrEmpty(id) && visibleFamilyIds.Contains(id))
                 .ToHashSet(StringComparer.Ordinal);
+
+            // A person is only selectable if at least one of their families is
+            // visible to the user. Otherwise they are dropped entirely.
+            if (families.Count == 0) continue;
+
             _personFamilies[g.Key] = families;
 
             var first = g.First();
@@ -366,6 +383,9 @@ else
         if (_userId is null) return;
 
         // People who belong to at least one selected family and are not hidden.
+        // _personFamilies only contains people whose family is in the visible
+        // set (see OnInitializedAsync), so this can never surface a person
+        // from a family the user has no granted permission for.
         var visiblePersonIds = _personFamilies
             .Where(kv => kv.Value.Any(f => _selectedFamilyIds.Contains(f)))
             .Select(kv => kv.Key)
