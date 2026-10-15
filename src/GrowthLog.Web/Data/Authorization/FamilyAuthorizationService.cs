@@ -103,16 +103,18 @@ public class FamilyAuthorizationService
             OR p.CreatedByUserId = @UserId
             -- Rule 4: person is in a Source family of an active connection
             -- whose Target family the user belongs to, and that connection
-            -- has a granted permission matching the person's membership kind.
+            -- has an *effective* granted permission matching the person's
+            -- membership kind.
             --
             -- A FamilyConnection alone NEVER grants visibility. Visibility
-            -- requires an effective grant: a SharingPermissions row with
-            -- IsGranted = 1 for the matching kind, AND no later row for the
-            -- same (connection, kind) with IsGranted = 0. The "no later
-            -- revoke" check makes this correct even if the unique index on
-            -- (FamilyConnectionId, PermissionKind) is missing and duplicate
-            -- rows accumulate — a stale IsGranted = 1 row can never win over
-            -- a newer IsGranted = 0 row.
+            -- requires an effective grant: the newest SharingPermissions row
+            -- for the (connection, kind) pair must have IsGranted = 1.
+            --
+            -- "Newest" is determined by UpdatedUtc DESC, rowid DESC. rowid is
+            -- SQLite's monotonic insert counter, so it breaks ties when two
+            -- toggles land in the same millisecond. This is correct even if
+            -- duplicate rows exist for the same (connection, kind) — a stale
+            -- IsGranted = 1 row can never win over a newer IsGranted = 0 row.
             OR EXISTS (
                 SELECT 1
                 FROM PersonFamilyMembership pfm2
@@ -132,14 +134,14 @@ public class FamilyAuthorizationService
                      OR (sp.PermissionKind = 'ViewChildren' AND pfm2.MembershipKind = 'Child')
                      OR (sp.PermissionKind = 'ViewAdults'   AND pfm2.MembershipKind = 'Adult')
                   )
-                  -- No newer revoke for the same (connection, kind).
-                  AND NOT EXISTS (
-                        SELECT 1
+                  -- sp must be the newest row for its (connection, kind).
+                  AND sp.rowid = (
+                        SELECT sp2.rowid
                         FROM SharingPermissions sp2
                         WHERE sp2.FamilyConnectionId = sp.FamilyConnectionId
                           AND sp2.PermissionKind = sp.PermissionKind
-                          AND sp2.IsGranted = 0
-                          AND sp2.UpdatedUtc > sp.UpdatedUtc
+                        ORDER BY sp2.UpdatedUtc DESC, sp2.rowid DESC
+                        LIMIT 1
                   )
             )
           )
@@ -176,10 +178,10 @@ public class FamilyAuthorizationService
           -- *effective* granted permission that yields at least one visible
           -- person. A connection alone never makes the family visible.
           --
-          -- "Effective" means: a SharingPermissions row with IsGranted = 1
-          -- for the matching kind, AND no later row for the same
-          -- (connection, kind) with IsGranted = 0. This is robust even if
-          -- duplicate permission rows exist.
+          -- "Effective" means: the newest SharingPermissions row for the
+          -- (connection, kind) pair has IsGranted = 1. "Newest" is
+          -- UpdatedUtc DESC, rowid DESC — rowid breaks same-millisecond ties.
+          -- This is robust even if duplicate permission rows exist.
           AND EXISTS (
                 SELECT 1
                 FROM FamilyConnections c
@@ -199,14 +201,14 @@ public class FamilyAuthorizationService
                      OR (sp.PermissionKind = 'ViewChildren' AND pfm.MembershipKind = 'Child')
                      OR (sp.PermissionKind = 'ViewAdults'   AND pfm.MembershipKind = 'Adult')
                   )
-                  -- No newer revoke for the same (connection, kind).
-                  AND NOT EXISTS (
-                        SELECT 1
+                  -- sp must be the newest row for its (connection, kind).
+                  AND sp.rowid = (
+                        SELECT sp2.rowid
                         FROM SharingPermissions sp2
                         WHERE sp2.FamilyConnectionId = sp.FamilyConnectionId
                           AND sp2.PermissionKind = sp.PermissionKind
-                          AND sp2.IsGranted = 0
-                          AND sp2.UpdatedUtc > sp.UpdatedUtc
+                        ORDER BY sp2.UpdatedUtc DESC, sp2.rowid DESC
+                        LIMIT 1
                   )
           )
         """;
