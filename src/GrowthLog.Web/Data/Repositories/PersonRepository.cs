@@ -135,7 +135,7 @@ public class PersonRepository
                 p.DateOfBirth,
                 p.AvatarUrl,
                 p.CreatedUtc,
-                p.IsDeleted,
+                p.IsDeleted, 
                 pfm.FamilyId,
                 f.Name AS FamilyName,
                 CASE WHEN fm.UserId IS NULL THEN 1 ELSE 0 END AS IsShared
