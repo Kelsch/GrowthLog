@@ -175,7 +175,7 @@ public class FamilyAuthorizationService
         "        --     the family visible on the chips. " +
         "        OR p.UserId = @UserId " +
         "        OR p.CreatedByUserId = @UserId " +
-        "  )";
+        "  ) ";
 
     public async Task<bool> CanViewPersonAsync(string userId, string personId)
     {
