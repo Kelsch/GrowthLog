@@ -46,17 +46,14 @@ public class ChartDataService
         HashSet<string>? familyFilter = null;
         if (familyIds is { Count: > 0 })
         {
+            // Use the single source of truth for family visibility. A family
+            // the user cannot see (no membership, no effective sharing grant)
+            // is dropped from the filter, and the VisiblePeopleSql predicate
+            // below still excludes its people.
             var visibleFamilyIds = await connection.QueryAsync<string>($"""
                 SELECT f.Id
                 FROM Families f
-                WHERE f.IsDeleted = 0
-                  AND (
-                        EXISTS (
-                            SELECT 1 FROM FamilyMemberships fm
-                            WHERE fm.FamilyId = f.Id AND fm.UserId = @UserId
-                        )
-                     OR f.Id IN ({FamilyAuthorizationService.SharedFamiliesSql})
-                  )
+                WHERE f.Id IN ({FamilyAuthorizationService.VisibleFamiliesSql})
                 """,
                 new { UserId = userId });
 

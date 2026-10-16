@@ -152,73 +152,93 @@ public class FamilyAuthorizationService
         """;
 
     /// <summary>
-    /// SQL fragment that yields the IDs of families the user can see *via a
-    /// sharing connection* (i.e. families the user is NOT a member of, but
-    /// which are the Source of an active FamilyConnection whose Target family
-    /// the user belongs to, and where at least one SharingPermission is
-    /// granted that yields at least one visible person).
+    /// SQL fragment that yields the IDs of every family the user can see.
+    /// This is the SINGLE source of truth for family visibility. Every
+    /// caller that lists families (family chips, family filter, family
+    /// picker, dashboard) MUST use this fragment — do not write a second
+    /// "list families" query anywhere else.
     ///
-    /// This is the ONLY correct way to build a "shared families" list. It
-    /// reuses the same kind-aware predicate as VisiblePeopleSql rule 4, so a
-    /// family with only ViewChildren granted will appear here only if it
-    /// actually has at least one Child member; a family with no granted
-    /// permission will not appear at all.
+    /// A family is visible if and only if ONE of these is true:
+    ///
+    ///   (1) Membership: the user has a FamilyMembership row in the family.
+    ///
+    ///   (2) Sharing: there is an active FamilyConnection whose
+    ///       TargetFamilyId is a family the user belongs to (i.e. the user
+    ///       is on the RECEIVING side), AND that connection has at least one
+    ///       *effective* granted SharingPermission. "Effective" means the
+    ///       newest SharingPermissions row for the (connection, kind) pair
+    ///       has IsGranted = 1. If every permission row for the connection
+    ///       is IsGranted = 0 (or no rows exist), the family is NOT visible.
     ///
     /// Direction convention (matches FamilyConnection):
     ///   SourceFamilyId = the family that OWNS the data being shared out.
     ///   TargetFamilyId = the family that RECEIVES visibility.
+    ///
+    /// Note: unlike <see cref="SharedFamiliesSql"/>, this fragment does NOT
+    /// require the source family to actually have a member of the granted
+    /// kind. A family with ViewChildren granted but no children still shows
+    /// up in the family list (with zero visible people) — that is the
+    /// correct UX: the user granted access, so the family is connected.
     /// </summary>
-    public const string SharedFamiliesSql = """
+    public const string VisibleFamiliesSql = """
         SELECT DISTINCT f.Id
         FROM Families f
         WHERE f.IsDeleted = 0
-          -- The user is NOT a direct member of this family.
-          AND NOT EXISTS (
-                SELECT 1 FROM FamilyMemberships mine
-                WHERE mine.FamilyId = f.Id AND mine.UserId = @UserId
+          AND (
+                -- (1) Membership: the user belongs to this family.
+                EXISTS (
+                    SELECT 1 FROM FamilyMemberships mine
+                    WHERE mine.FamilyId = f.Id AND mine.UserId = @UserId
+                )
+                -- (2) Sharing: this family is the Source of an active
+                -- connection whose Target family the user belongs to, and
+                -- that connection has at least one effective granted
+                -- permission. A connection alone never makes the family
+                -- visible; a permission row with IsGranted = 0 never makes
+                -- it visible either.
+                OR EXISTS (
+                    SELECT 1
+                    FROM FamilyConnections c
+                    JOIN FamilyMemberships fm2
+                        ON fm2.FamilyId = c.TargetFamilyId
+                       AND fm2.UserId = @UserId
+                    JOIN SharingPermissions sp
+                        ON sp.FamilyConnectionId = c.Id
+                       AND sp.IsGranted = 1
+                       AND sp.PermissionKind IN ('ViewChildren', 'ViewAdults', 'ViewAll')
+                    WHERE c.SourceFamilyId = f.Id
+                      AND c.IsActive = 1
+                      -- sp must be the newest row for its (connection, kind).
+                      -- rowid breaks same-millisecond ties deterministically.
+                      AND sp.rowid = (
+                            SELECT sp2.rowid
+                            FROM SharingPermissions sp2
+                            WHERE sp2.FamilyConnectionId = sp.FamilyConnectionId
+                              AND sp2.PermissionKind = sp.PermissionKind
+                            ORDER BY sp2.UpdatedUtc DESC, sp2.rowid DESC
+                            LIMIT 1
+                      )
+                )
           )
-          -- This family is the Source of an active connection whose Target
-          -- family the user belongs to, and that connection has at least one
-          -- *effective* granted permission that yields at least one visible
-          -- person. A connection alone never makes the family visible.
-          --
-          -- "Effective" means: the newest SharingPermissions row for the
-          -- (connection, kind) pair has IsGranted = 1. "Newest" is
-          -- UpdatedUtc DESC, rowid DESC — rowid breaks same-millisecond ties.
-          -- This is robust even if duplicate permission rows exist.
-          --
-          -- The PermissionKind is constrained to the three known kinds so an
-          -- unknown/stale kind can never accidentally match.
-          AND EXISTS (
-                SELECT 1
-                FROM FamilyConnections c
-                JOIN FamilyMemberships fm2
-                    ON fm2.FamilyId = c.TargetFamilyId
-                   AND fm2.UserId = @UserId
-                JOIN SharingPermissions sp
-                    ON sp.FamilyConnectionId = c.Id
-                   AND sp.IsGranted = 1
-                   AND sp.PermissionKind IN ('ViewChildren', 'ViewAdults', 'ViewAll')
-                JOIN PersonFamilyMembership pfm
-                    ON pfm.FamilyId = c.SourceFamilyId
-                   AND pfm.IsActive = 1
-                WHERE c.SourceFamilyId = f.Id
-                  AND c.IsActive = 1
-                  AND (
-                        sp.PermissionKind = 'ViewAll'
-                     OR (sp.PermissionKind = 'ViewChildren' AND pfm.MembershipKind = 'Child')
-                     OR (sp.PermissionKind = 'ViewAdults'   AND pfm.MembershipKind = 'Adult')
-                  )
-                  -- sp must be the newest row for its (connection, kind).
-                  AND sp.rowid = (
-                        SELECT sp2.rowid
-                        FROM SharingPermissions sp2
-                        WHERE sp2.FamilyConnectionId = sp.FamilyConnectionId
-                          AND sp2.PermissionKind = sp.PermissionKind
-                        ORDER BY sp2.UpdatedUtc DESC, sp2.rowid DESC
-                        LIMIT 1
-                  )
-          )
+        """;
+
+    /// <summary>
+    /// SQL fragment that yields the IDs of families the user can see *via a
+    /// sharing connection only* (i.e. families the user is NOT a member of,
+    /// but which are visible under <see cref="VisibleFamiliesSql"/> rule 2).
+    ///
+    /// This is derived from <see cref="VisibleFamiliesSql"/> so the two can
+    /// never drift. Use this when you need to distinguish "shared into me"
+    /// from "I am a member" (e.g. the "shared" badge in the UI).
+    /// </summary>
+    public const string SharedFamiliesSql = """
+        SELECT vf.Id
+        FROM (""" + VisibleFamiliesSql + """
+        ) vf
+        WHERE NOT EXISTS (
+            SELECT 1 FROM FamilyMemberships mine
+            WHERE mine.FamilyId = vf.Id AND mine.UserId = @UserId
+        )
         """;
 
     public async Task<bool> CanViewPersonAsync(string userId, string personId)
