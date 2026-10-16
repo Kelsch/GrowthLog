@@ -231,15 +231,13 @@ public class FamilyAuthorizationService
     /// never drift. Use this when you need to distinguish "shared into me"
     /// from "I am a member" (e.g. the "shared" badge in the UI).
     /// </summary>
-    public const string SharedFamiliesSql = """
-        SELECT vf.Id
-        FROM (""" + VisibleFamiliesSql + """
-        ) vf
-        WHERE NOT EXISTS (
-            SELECT 1 FROM FamilyMemberships mine
-            WHERE mine.FamilyId = vf.Id AND mine.UserId = @UserId
-        )
-        """;
+    public const string SharedFamiliesSql =
+        "SELECT vf.Id " +
+        "FROM (" + VisibleFamiliesSql + ") vf " +
+        "WHERE NOT EXISTS ( " +
+        "    SELECT 1 FROM FamilyMemberships mine " +
+        "    WHERE mine.FamilyId = vf.Id AND mine.UserId = @UserId " +
+        ")";
 
     public async Task<bool> CanViewPersonAsync(string userId, string personId)
     {
