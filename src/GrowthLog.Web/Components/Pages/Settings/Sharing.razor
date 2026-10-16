@@ -14,220 +14,227 @@
 
 <h1>Sharing &amp; Privacy</h1>
 
+<p class="text-muted">
+    You share a whole family with another family. People who receive the share
+    depend on your connection rules. Membership is managed under
+    <a href="families">Families</a>, not here.
+</p>
+
 @if (_families is null)
 {
     <p>Loading…</p>
-} 
+}
 else if (_families.Count == 0)
 {
     <p>You are not a member of any family yet.</p>
 }
 else
 {
-    <div class="mb-3">
-        <label class="form-label">Family</label>
-        <select class="form-select" value="@_selectedFamilyId" @onchange="OnFamilyChanged">
-            @foreach (var f in _families)
-            {
-                <option value="@f.Id">@f.Name</option>
-            }
-        </select>
-    </div>
-
-    @if (!_canManage)
-    {
-        <div class="alert alert-warning">
-            Only the family owner can change sharing settings.
-        </div>
-    }
-
-    <h2>Connected families</h2>
-
-    @if (_connections.Count == 0)
-    {
-        <p>No connected families yet.</p>
-    }
-    else
-    {
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Family</th>
-                    <th>Label</th>
-                    <th>View children</th>
-                    <th>View adults</th>
-                    <th>View all</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var c in _connections)
-                {
-                    <tr>
-                        <td>@c.TargetFamilyName</td>
-                        <td>@c.Label</td>
-                        <td>
-                            <input type="checkbox" checked="@c.ViewChildren"
-                                   disabled="@(!_canManage)"
-                                   @onchange="e => Toggle(c, SharingPermissionKinds.ViewChildren, (bool)e.Value!)" />
-                        </td>
-                        <td>
-                            <input type="checkbox" checked="@c.ViewAdults"
-                                   disabled="@(!_canManage)"
-                                   @onchange="e => Toggle(c, SharingPermissionKinds.ViewAdults, (bool)e.Value!)" />
-                        </td>
-                        <td>
-                            <input type="checkbox" checked="@c.ViewAll"
-                                   disabled="@(!_canManage)"
-                                   @onchange="e => Toggle(c, SharingPermissionKinds.ViewAll, (bool)e.Value!)" />
-                        </td>
-                        <td>
-                            @if (_canManage)
-                            {
-                                <button class="btn btn-sm btn-outline-danger"
-                                        @onclick="() => RemoveConnection(c)">Disconnect</button>
-                            }
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
-
     @if (!string.IsNullOrEmpty(_error))
     {
         <div class="alert alert-danger">@_error</div>
     }
 
+    @* ------------------------------------------------------------------
+       Section 1 — Existing connections (primary).
+       Lists only actual FamilyConnections where the selected source family
+       is the Source. A family the user merely belongs to is never listed
+       here. Permissions and Disconnect live on each row.
+       ------------------------------------------------------------------ *@
+    <section class="sharing-section">
+        <div class="section-header">
+            <h2>Existing connections</h2>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Share from</label>
+            <select class="form-select" value="@_selectedFamilyId" @onchange="OnFamilyChanged">
+                @foreach (var f in _families)
+                {
+                    <option value="@f.Id">@f.Name</option>
+                }
+            </select>
+            <p class="text-muted mt-1 mb-0">
+                Choose which of your families owns the data being shared.
+            </p>
+        </div>
+
+        @if (!_canManage)
+        {
+            <div class="alert alert-warning">
+                Only the family owner can change sharing settings.
+            </div>
+        }
+
+        @if (_connections.Count == 0)
+        {
+            <p class="text-muted">
+                No connections yet. Use <strong>Share with</strong> below to
+                connect this family to another.
+            </p>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Connection</th>
+                        <th>View children</th>
+                        <th>View adults</th>
+                        <th>View all</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in _connections)
+                    {
+                        <tr>
+                            <td>
+                                <div>
+                                    Sharing <strong>@_selectedFamilyName</strong>
+                                    with <strong>@c.TargetFamilyName</strong>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(c.Label))
+                                {
+                                    <div class="text-muted small">@c.Label</div>
+                                }
+                            </td>
+                            <td>
+                                <input type="checkbox" checked="@c.ViewChildren"
+                                       disabled="@(!_canManage)"
+                                       @onchange="e => Toggle(c, SharingPermissionKinds.ViewChildren, (bool)e.Value!)" />
+                            </td>
+                            <td>
+                                <input type="checkbox" checked="@c.ViewAdults"
+                                       disabled="@(!_canManage)"
+                                       @onchange="e => Toggle(c, SharingPermissionKinds.ViewAdults, (bool)e.Value!)" />
+                            </td>
+                            <td>
+                                <input type="checkbox" checked="@c.ViewAll"
+                                       disabled="@(!_canManage)"
+                                       @onchange="e => Toggle(c, SharingPermissionKinds.ViewAll, (bool)e.Value!)" />
+                            </td>
+                            <td>
+                                @if (_canManage)
+                                {
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            @onclick="() => RemoveConnection(c)">Disconnect</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    @* ------------------------------------------------------------------
+       Section 2 — Share with (new connection only).
+       Eligible targets come from the co-member discovery rules. We exclude:
+         * the selected source family itself
+         * families already connected to the selected source (either
+           direction), so the list only shows genuinely new options
+       ------------------------------------------------------------------ *@
     @if (_canManage)
     {
-        <h3>Connect another family</h3>
-        <p class="text-muted">
-            Connecting a family does not grant visibility by itself. After the
-            connection exists, use the permission checkboxes above to choose
-            what the other family can see.
-        </p>
-
-        <h4>Families you already belong to</h4>
-        @if (_otherFamilies.Count == 0)
-        {
-            <p class="text-muted">You have no other families to connect.</p>
-        }
-        else
-        {
-            <EditForm Model="_newConnection" OnValidSubmit="CreateConnection">
-                <div class="row g-2">
-                    <div class="col-md-5">
-                        <InputSelect @bind-Value="_newConnection.TargetFamilyId" class="form-select">
-                            <option value="">— select family —</option>
-                            @foreach (var f in _otherFamilies)
-                            {
-                                <option value="@f.Id">@f.Name</option>
-                            }
-                        </InputSelect>
-                    </div>
-                    <div class="col-md-4">
-                        <InputText @bind-Value="_newConnection.Label" class="form-control"
-                                   placeholder="Label (e.g. My Parents)" />
-                    </div>
-                    <div class="col-md-3">
-                        <AntiforgeryToken />
-                        <button type="submit" class="btn btn-primary">Connect</button>
-                    </div>
-                </div>
-            </EditForm>
-        }
-
-        <h4 class="mt-4">Connect to a family through someone you share a family with</h4>
-        <p class="text-muted">
-            You can only connect to families owned by people who already share
-            at least one family membership with you. This keeps discovery
-            private — GrowthLog never lists families you have no relationship with.
-        </p>
-
-        @if (_coMembers.Count == 0)
-        {
-            <p class="text-muted">No co-members found.</p>
-        }
-        else
-        {
-            <div class="row g-2 mb-3">
-                <div class="col-md-6">
-                    <label class="form-label">Person you share a family with</label>
-                    <select class="form-select" value="@_selectedCoMemberId" @onchange="OnCoMemberChanged">
-                        <option value="">— select person —</option>
-                        @foreach (var cm in _coMembers)
-                        {
-                            <option value="@cm.UserId">
-                                @(string.IsNullOrWhiteSpace(cm.DisplayName) ? cm.Email : cm.DisplayName)
-                                @(string.IsNullOrWhiteSpace(cm.SharedFamilyNames) ? "" : $" (via {cm.SharedFamilyNames})")
-                            </option>
-                        }
-                    </select>
-                </div>
+        <section class="sharing-section">
+            <div class="section-header">
+                <h2>Share with</h2>
             </div>
 
-            @if (!string.IsNullOrEmpty(_selectedCoMemberId))
+            <p class="text-muted">
+                You can only connect to families owned by people who already
+                share at least one family membership with you. GrowthLog never
+                lists families you have no relationship with.
+            </p>
+
+            @if (_coMembers.Count == 0)
             {
-                @if (_coMemberFamilies.Count == 0)
-                {
-                    <p class="text-muted">
-                        This person has no families you can connect to (you may already
-                        be a member of them, or a connection already exists).
-                    </p>
-                }
-                else
-                {
-                    <div class="row g-2">
-                        <div class="col-md-4">
-                            <label class="form-label">Share my family</label>
-                            <select class="form-select" value="@_connectSourceFamilyId" @onchange="OnConnectSourceChanged">
-                                <option value="">— select my family —</option>
-                                @foreach (var f in _families!)
-                                {
-                                    <option value="@f.Id">@f.Name</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">With their family</label>
-                            <select class="form-select" value="@_connectTargetFamilyId" @onchange="OnConnectTargetChanged">
-                                <option value="">— select their family —</option>
-                                @foreach (var f in _coMemberFamilies)
-                                {
-                                    <option value="@f.FamilyId">@f.FamilyName</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="col-md-4 d-flex align-items-end">
-                            <button type="button" class="btn btn-primary"
-                                    disabled="@(!CanCreateCoMemberConnection)"
-                                    @onclick="CreateCoMemberConnection">
-                                Connect
-                            </button>
-                        </div>
+                <p class="text-muted">No co-members found.</p>
+            }
+            else
+            {
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Person you share a family with</label>
+                        <select class="form-select" value="@_selectedCoMemberId" @onchange="OnCoMemberChanged">
+                            <option value="">— select person —</option>
+                            @foreach (var cm in _coMembers)
+                            {
+                                <option value="@cm.UserId">
+                                    @(string.IsNullOrWhiteSpace(cm.DisplayName) ? cm.Email : cm.DisplayName)
+                                    @(string.IsNullOrWhiteSpace(cm.SharedFamilyNames) ? "" : $" (via {cm.SharedFamilyNames})")
+                                </option>
+                            }
+                        </select>
                     </div>
-                    <p class="text-muted mt-2">
-                        This creates a connection from <strong>your family</strong> (the
-                        source that owns the data) to <strong>their family</strong> (the
-                        target that receives visibility). No data is shared until you
-                        grant a permission above.
-                    </p>
+                </div>
+
+                @if (!string.IsNullOrEmpty(_selectedCoMemberId))
+                {
+                    @if (_availableTargets.Count == 0)
+                    {
+                        <div class="alert alert-secondary">
+                            <strong>No families available to connect.</strong>
+                            <div class="small mt-1">
+                                This person has no families you can connect to.
+                                You may already be a member of them, or a
+                                connection already exists between your selected
+                                source family and theirs.
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <label class="form-label">Share my family</label>
+                                <select class="form-select" value="@_connectSourceFamilyId" @onchange="OnConnectSourceChanged">
+                                    <option value="">— select my family —</option>
+                                    @foreach (var f in _families!)
+                                    {
+                                        <option value="@f.Id">@f.Name</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">With their family</label>
+                                <select class="form-select" value="@_connectTargetFamilyId" @onchange="OnConnectTargetChanged">
+                                    <option value="">— select their family —</option>
+                                    @foreach (var f in _availableTargets)
+                                    {
+                                        <option value="@f.FamilyId">@f.FamilyName</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <button type="button" class="btn btn-primary"
+                                        disabled="@(!CanCreateCoMemberConnection)"
+                                        @onclick="CreateCoMemberConnection">
+                                    Connect
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-muted mt-2">
+                            This creates a connection from <strong>your family</strong>
+                            (the source that owns the data) to <strong>their family</strong>
+                            (the target that receives visibility). No data is shared
+                            until you grant a permission above.
+                        </p>
+                    }
                 }
             }
-        }
+        </section>
     }
 }
 
 @code {
     private List<Family>? _families;
-    private List<Family> _otherFamilies = new();
     private List<FamilyConnectionView> _connections = new();
     private string? _selectedFamilyId;
     private string? _userId;
     private bool _canManage;
     private string? _error;
-    private readonly NewConnectionModel _newConnection = new();
 
     // Co-member discovery (private: only people who share a family with me).
     private List<CoMemberRow> _coMembers = new();
@@ -235,6 +242,33 @@ else
     private string? _selectedCoMemberId;
     private string? _connectSourceFamilyId;
     private string? _connectTargetFamilyId;
+
+    private string _selectedFamilyName
+        => _families?.FirstOrDefault(f => f.Id == _selectedFamilyId)?.Name ?? "this family";
+
+    /// <summary>
+    /// Targets eligible for a NEW connection from the selected source family.
+    /// Excludes:
+    ///   * the selected source family itself
+    ///   * families already connected to the selected source (either
+    ///     direction), so the list only shows genuinely new options
+    /// </summary>
+    private List<ConnectableFamilyRow> _availableTargets
+    {
+        get
+        {
+            if (_selectedFamilyId is null) return new();
+
+            var connectedIds = _connections
+                .SelectMany(c => new[] { c.SourceFamilyId, c.TargetFamilyId })
+                .ToHashSet(StringComparer.Ordinal);
+
+            return _coMemberFamilies
+                .Where(f => f.FamilyId != _selectedFamilyId)
+                .Where(f => !connectedIds.Contains(f.FamilyId))
+                .ToList();
+        }
+    }
 
     private bool CanCreateCoMemberConnection
         => !string.IsNullOrEmpty(_connectSourceFamilyId)
@@ -308,7 +342,7 @@ else
     {
         _selectedFamilyId = e.Value?.ToString();
         // Reset the pending target selection so it can't point at the new source.
-        _newConnection.TargetFamilyId = string.Empty;
+        _connectTargetFamilyId = null;
         await LoadAsync();
     }
 
@@ -319,15 +353,13 @@ else
         _canManage = await Authz.CanManageSharingAsync(_userId, _selectedFamilyId);
         _connections = (await Connections.GetOutgoingViewsAsync(_selectedFamilyId)).ToList();
 
-        // Candidate target families: any family the user belongs to, except the source.
-        _otherFamilies = _families!
-            .Where(f => f.Id != _selectedFamilyId)
-            .ToList();
-
-        // If the previously selected target is no longer valid, clear it.
-        if (!_otherFamilies.Any(f => f.Id == _newConnection.TargetFamilyId))
+        // If the previously selected target is no longer eligible (e.g. it
+        // just became connected), clear it so the picker can't submit a
+        // duplicate connection.
+        if (!string.IsNullOrEmpty(_connectTargetFamilyId)
+            && !_availableTargets.Any(f => f.FamilyId == _connectTargetFamilyId))
         {
-            _newConnection.TargetFamilyId = string.Empty;
+            _connectTargetFamilyId = null;
         }
     }
 
@@ -338,41 +370,10 @@ else
         await LoadAsync();
     }
 
-    private async Task CreateConnection()
-    {
-        if (!_canManage || _userId is null || _selectedFamilyId is null) return;
-        if (string.IsNullOrEmpty(_newConnection.TargetFamilyId)) return;
-
-        // Defensive guard: never connect a family to itself.
-        if (_newConnection.TargetFamilyId == _selectedFamilyId)
-        {
-            _error = "A family cannot be connected to itself.";
-            return;
-        }
-
-        _error = null;
-
-        await Connections.CreateAsync(
-            _selectedFamilyId,
-            _newConnection.TargetFamilyId,
-            string.IsNullOrWhiteSpace(_newConnection.Label) ? null : _newConnection.Label,
-            _userId);
-
-        _newConnection.TargetFamilyId = string.Empty;
-        _newConnection.Label = string.Empty;
-        await LoadAsync();
-    }
-
     private async Task RemoveConnection(FamilyConnectionView c)
     {
         if (!_canManage) return;
         await Connections.DeleteAsync(c.Id);
         await LoadAsync();
-    }
-
-    public class NewConnectionModel
-    {
-        public string TargetFamilyId { get; set; } = string.Empty;
-        public string? Label { get; set; }
     }
 }
