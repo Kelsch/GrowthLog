@@ -49,13 +49,14 @@ else
         <div class="mb-3">
             <label class="form-label">Share from</label>
             <select class="form-select" value="@_selectedFamilyId" @onchange="OnFamilyChanged">
-                @foreach (var f in _families)
+                @foreach (var f in _ownedFamilies)
                 {
                     <option value="@f.Id">@f.Name</option>
                 }
             </select>
             <p class="text-muted mt-1 mb-0">
                 Choose which of your families owns the data being shared.
+                Only families you own can be shared.
             </p>
         </div>
 
@@ -191,7 +192,7 @@ else
                                 <label class="form-label">Share my family</label>
                                 <select class="form-select" value="@_connectSourceFamilyId" @onchange="OnConnectSourceChanged">
                                     <option value="">— select my family —</option>
-                                    @foreach (var f in _families!)
+                                    @foreach (var f in _ownedFamilies)
                                     {
                                         <option value="@f.Id">@f.Name</option>
                                     }
@@ -236,6 +237,13 @@ else
     private bool _canManage;
     private string? _error;
 
+    /// <summary>
+    /// Families the user can administer (Owner). This is the "Share from"
+    /// list — you can only share a family you own. Membership alone is not
+    /// enough to share a family's data out.
+    /// </summary>
+    private List<Family> _ownedFamilies = new();
+
     // Co-member discovery (private: only people who share a family with me).
     private List<CoMemberRow> _coMembers = new();
     private List<ConnectableFamilyRow> _coMemberFamilies = new();
@@ -248,10 +256,15 @@ else
 
     /// <summary>
     /// Targets eligible for a NEW connection from the selected source family.
-    /// Excludes:
-    ///   * the selected source family itself
-    ///   * families already connected to the selected source (either
-    ///     direction), so the list only shows genuinely new options
+    ///
+    /// Excludes ONLY:
+    ///   * the selected source family itself (S ≠ T)
+    ///   * targets T where an active connection S → T already exists for the
+    ///     currently selected source S
+    ///
+    /// Does NOT exclude T merely because some *other* source S2 → T exists.
+    /// That is what allows sharing Chrinn's family with Jean's family after
+    /// already sharing your own family with Jean's.
     /// </summary>
     private List<ConnectableFamilyRow> _availableTargets
     {
@@ -259,13 +272,16 @@ else
         {
             if (_selectedFamilyId is null) return new();
 
-            var connectedIds = _connections
-                .SelectMany(c => new[] { c.SourceFamilyId, c.TargetFamilyId })
+            // _connections is already scoped to the selected source S
+            // (GetOutgoingViewsAsync(_selectedFamilyId)), so its TargetFamilyId
+            // values are exactly the T where S → T already exists.
+            var alreadyConnectedTargets = _connections
+                .Select(c => c.TargetFamilyId)
                 .ToHashSet(StringComparer.Ordinal);
 
             return _coMemberFamilies
                 .Where(f => f.FamilyId != _selectedFamilyId)
-                .Where(f => !connectedIds.Contains(f.FamilyId))
+                .Where(f => !alreadyConnectedTargets.Contains(f.FamilyId))
                 .ToList();
         }
     }
@@ -283,9 +299,21 @@ else
 
         _families = (await Families.GetForUserAsync(_userId)).ToList();
         _coMembers = (await Discovery.GetCoMembersAsync(_userId)).ToList();
-        if (_families.Count > 0)
+
+        // "Share from" lists only families the user can administer (Owner).
+        // Membership alone is not enough to share a family's data out.
+        _ownedFamilies = new List<Family>();
+        foreach (var f in _families)
         {
-            _selectedFamilyId = _families[0].Id;
+            if (await Authz.CanManageSharingAsync(_userId, f.Id))
+            {
+                _ownedFamilies.Add(f);
+            }
+        }
+
+        if (_ownedFamilies.Count > 0)
+        {
+            _selectedFamilyId = _ownedFamilies[0].Id;
             await LoadAsync();
         }
     }
@@ -318,6 +346,15 @@ else
         if (_connectSourceFamilyId == _connectTargetFamilyId)
         {
             _error = "A family cannot be connected to itself.";
+            return;
+        }
+
+        // Defensive guard: the source must be a family the user can
+        // administer. The dropdown only lists owned families, but a stale
+        // selection could survive a reload.
+        if (!await Authz.CanManageSharingAsync(_userId, _connectSourceFamilyId!))
+        {
+            _error = "You can only share a family you own.";
             return;
         }
 

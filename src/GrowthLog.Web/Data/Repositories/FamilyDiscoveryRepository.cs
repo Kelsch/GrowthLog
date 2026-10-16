@@ -127,10 +127,18 @@ public class FamilyDiscoveryRepository
 
     /// <summary>
     /// Families owned/administered by <paramref name="otherUserId"/> that the
-    /// current user is NOT a member of and has NO existing connection to (in
-    /// either direction). This is the discovery query for the Sharing page:
-    /// it lets a user connect one of their own families to a co-member's
-    /// family, even when the only thing they share is a single membership.
+    /// current user is NOT a member of. This is the discovery query for the
+    /// Sharing page: it lets a user connect one of their own families to a
+    /// co-member's family, even when the only thing they share is a single
+    /// membership.
+    ///
+    /// IMPORTANT: this query does NOT exclude families that already have a
+    /// connection from some *other* source family. Pair-level exclusion
+    /// (source S already connected to target T) is applied by the caller,
+    /// scoped to the currently selected source. Excluding here would wrongly
+    /// block a second source S2 from connecting to the same target T — e.g.
+    /// sharing Chrinn's family with Jean's family after already sharing your
+    /// own family with Jean's.
     ///
     /// Discovery is still scoped to co-members — the caller must have obtained
     /// <paramref name="otherUserId"/> from <see cref="GetCoMembersAsync"/>.
@@ -153,19 +161,10 @@ public class FamilyDiscoveryRepository
                AND fm.Role IN ('Owner', 'Adult')
             WHERE f.IsDeleted = 0
               -- Current user is not already a member of this family.
+              -- (You cannot "share into" a family you already belong to.)
               AND NOT EXISTS (
                     SELECT 1 FROM FamilyMemberships mine
                     WHERE mine.FamilyId = f.Id AND mine.UserId = @UserId
-              )
-              -- No existing connection in either direction between any of the
-              -- current user's families and this family.
-              AND NOT EXISTS (
-                    SELECT 1
-                    FROM FamilyConnections c
-                    JOIN FamilyMemberships mine2
-                        ON mine2.UserId = @UserId
-                       AND (c.SourceFamilyId = mine2.FamilyId OR c.TargetFamilyId = mine2.FamilyId)
-                    WHERE (c.SourceFamilyId = f.Id OR c.TargetFamilyId = f.Id)
               )
             ORDER BY f.Name
             """,
