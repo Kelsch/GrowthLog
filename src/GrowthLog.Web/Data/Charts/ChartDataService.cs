@@ -39,38 +39,40 @@ public class ChartDataService
     {
         var valueColumn = metric == ChartMetrics.Weight ? "m.WeightKg" : "m.HeightCm";
 
-        using var connection = _factory.Create();
+        // Single source of truth: the visibility service decides which
+        // families and people the user can see. The caller's personIds /
+        // familyIds can only narrow that set, never widen it.
+        var accessMap = await _visibility.GetAccessMapAsync(userId);
+        if (accessMap.Count == 0) return Array.Empty<ChartSeries>();
 
-        // The family filter is intersected with the user's *visible* families
-        // (membership + granted sharing) before it is used. This means a
-        // caller cannot widen visibility by passing a familyId the user has
-        // no granted permission for — the family is simply dropped from the
-        // filter, and the VisiblePeopleSql predicate below still excludes its
-        // people. A FamilyConnection alone never grants access.
+        var visiblePersonIds = await _visibility.GetVisiblePersonIdsAsync(userId);
+        if (visiblePersonIds.Count == 0) return Array.Empty<ChartSeries>();
+
         HashSet<string>? familyFilter = null;
         if (familyIds is { Count: > 0 })
         {
-            // Use the single source of truth for family visibility.
-            var visibleFamilyIds = await connection.QueryAsync<string>($"""
-                SELECT f.Id
-                FROM Families f
-                WHERE f.Id IN ({FamilyAuthorizationService.VisibleFamilyIdsSql})
-                """,
-                new { UserId = userId });
-
-            var visibleSet = new HashSet<string>(visibleFamilyIds, StringComparer.Ordinal);
             familyFilter = new HashSet<string>(
-                familyIds.Where(id => visibleSet.Contains(id)),
+                familyIds.Where(accessMap.ContainsKey),
                 StringComparer.Ordinal);
 
-            // If none of the requested families are visible, there is nothing
-            // to return — short-circuit so we never fall through to an
-            // unfiltered query.
             if (familyFilter.Count == 0)
             {
                 return Array.Empty<ChartSeries>();
             }
         }
+
+        var personFilter = personIds is { Count: > 0 }
+            ? new HashSet<string>(
+                personIds.Where(visiblePersonIds.Contains),
+                StringComparer.Ordinal)
+            : null;
+
+        if (personFilter is { Count: 0 })
+        {
+            return Array.Empty<ChartSeries>();
+        }
+
+        using var connection = _factory.Create();
 
         var rows = await connection.QueryAsync<SeriesRow>($"""
             SELECT
@@ -89,14 +91,15 @@ public class ChartDataService
             JOIN Families f ON f.Id = pfm.FamilyId AND f.IsDeleted = 0
             WHERE m.IsDeleted = 0
               AND {valueColumn} IS NOT NULL
-              AND p.Id IN ({FamilyAuthorizationService.VisiblePeopleSql})
+              AND p.Id IN @VisiblePersonIds
+              AND pfm.FamilyId IN @VisibleFamilyIds
             ORDER BY p.FirstName, p.LastName, m.MeasurementDate
             """,
-            new { UserId = userId });
-
-        var personFilter = personIds is { Count: > 0 }
-            ? new HashSet<string>(personIds, StringComparer.Ordinal)
-            : null;
+            new
+            {
+                VisiblePersonIds = visiblePersonIds.ToList(),
+                VisibleFamilyIds = accessMap.Keys.ToList()
+            });
 
         var series = new Dictionary<string, ChartSeries>(StringComparer.Ordinal);
 
