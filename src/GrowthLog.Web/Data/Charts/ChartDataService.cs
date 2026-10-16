@@ -16,10 +16,14 @@ namespace GrowthLog.Web.Data.Charts;
 public class ChartDataService
 {
     private readonly IDbConnectionFactory _factory;
+    private readonly FamilyVisibilityService _visibility;
 
-    public ChartDataService(IDbConnectionFactory factory)
+    public ChartDataService(
+        IDbConnectionFactory factory,
+        FamilyVisibilityService visibility)
     {
         _factory = factory;
+        _visibility = visibility;
     }
 
     /// <summary>

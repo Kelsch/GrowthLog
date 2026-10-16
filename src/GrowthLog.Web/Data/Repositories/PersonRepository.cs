@@ -66,10 +66,14 @@ public class CreatedPersonRow
 public class PersonRepository
 {
     private readonly IDbConnectionFactory _factory;
+    private readonly FamilyVisibilityService _visibility;
 
-    public PersonRepository(IDbConnectionFactory factory)
+    public PersonRepository(
+        IDbConnectionFactory factory,
+        FamilyVisibilityService visibility)
     {
         _factory = factory;
+        _visibility = visibility;
     }
 
     /// <summary>
@@ -79,14 +83,17 @@ public class PersonRepository
     /// </summary>
     public async Task<IReadOnlyList<Person>> GetVisibleForUserAsync(string userId)
     {
+        var visibleIds = await _visibility.GetVisiblePersonIdsAsync(userId);
+        if (visibleIds.Count == 0) return Array.Empty<Person>();
+
         using var connection = _factory.Create();
-        var rows = await connection.QueryAsync<Person>($"""
+        var rows = await connection.QueryAsync<Person>("""
             SELECT p.*
             FROM People p
-            WHERE p.Id IN ({FamilyAuthorizationService.VisiblePeopleSql})
+            WHERE p.Id IN @Ids
             ORDER BY p.FirstName, p.LastName
             """,
-            new { UserId = userId });
+            new { Ids = visibleIds.ToList() });
         return rows.ToList();
     }
 
@@ -95,17 +102,20 @@ public class PersonRepository
     /// </summary>
     public async Task<IReadOnlyList<Person>> GetVisibleForUserInFamilyAsync(string userId, string familyId)
     {
+        var visibleIds = await _visibility.GetVisiblePersonIdsAsync(userId);
+        if (visibleIds.Count == 0) return Array.Empty<Person>();
+
         using var connection = _factory.Create();
-        var rows = await connection.QueryAsync<Person>($"""
+        var rows = await connection.QueryAsync<Person>("""
             SELECT p.*
             FROM People p
             JOIN PersonFamilyMembership pfm ON pfm.PersonId = p.Id
             WHERE pfm.FamilyId = @FamilyId
               AND pfm.IsActive = 1
-              AND p.Id IN ({FamilyAuthorizationService.VisiblePeopleSql})
+              AND p.Id IN @Ids
             ORDER BY p.FirstName, p.LastName
             """,
-            new { UserId = userId, FamilyId = familyId });
+            new { Ids = visibleIds.ToList(), FamilyId = familyId });
         return rows.ToList();
     }
 
@@ -124,8 +134,14 @@ public class PersonRepository
     /// </summary>
     public async Task<IReadOnlyList<VisiblePersonRow>> GetVisiblePeopleWithFamilyAsync(string userId)
     {
+        var accessMap = await _visibility.GetAccessMapAsync(userId);
+        if (accessMap.Count == 0) return Array.Empty<VisiblePersonRow>();
+
+        var visibleIds = await _visibility.GetVisiblePersonIdsAsync(userId);
+        if (visibleIds.Count == 0) return Array.Empty<VisiblePersonRow>();
+
         using var connection = _factory.Create();
-        var rows = await connection.QueryAsync<VisiblePersonRow>($"""
+        var rows = await connection.QueryAsync<VisiblePersonRow>("""
             SELECT
                 p.Id,
                 p.UserId,
@@ -135,24 +151,31 @@ public class PersonRepository
                 p.DateOfBirth,
                 p.AvatarUrl,
                 p.CreatedUtc,
-                p.IsDeleted, 
+                p.IsDeleted,
                 pfm.FamilyId,
-                f.Name AS FamilyName,
-                CASE WHEN fm.UserId IS NULL THEN 1 ELSE 0 END AS IsShared
+                f.Name AS FamilyName
             FROM People p
             JOIN PersonFamilyMembership pfm ON pfm.PersonId = p.Id AND pfm.IsActive = 1
             JOIN Families f ON f.Id = pfm.FamilyId AND f.IsDeleted = 0
-            LEFT JOIN FamilyMemberships fm ON fm.FamilyId = pfm.FamilyId AND fm.UserId = @UserId
             WHERE p.IsDeleted = 0
-              -- VisiblePeopleSql already requires the person's family to be
-              -- visible (membership OR granted sharing) AND applies the
-              -- kind filter when access is via sharing only. No second
-              -- family-visibility clause is needed here.
-              AND p.Id IN ({FamilyAuthorizationService.VisiblePeopleSql})
+              AND p.Id IN @Ids
+              AND pfm.FamilyId IN @FamilyIds
             ORDER BY f.Name, p.FirstName, p.LastName
             """,
-            new { UserId = userId });
-        return rows.ToList();
+            new
+            {
+                Ids = visibleIds.ToList(),
+                FamilyIds = accessMap.Keys.ToList()
+            });
+
+        return rows
+            .Select(r =>
+            {
+                r.IsShared = accessMap.TryGetValue(r.FamilyId, out var a)
+                             && a is FamilyAccess.Shared;
+                return r;
+            })
+            .ToList();
     }
 
     /// <summary>
@@ -168,8 +191,11 @@ public class PersonRepository
     /// </summary>
     public async Task<IReadOnlyList<VisiblePersonRow>> GetSharedIntoFamilyAsync(string userId, string targetFamilyId)
     {
+        var visibleIds = await _visibility.GetVisiblePersonIdsAsync(userId);
+        if (visibleIds.Count == 0) return Array.Empty<VisiblePersonRow>();
+
         using var connection = _factory.Create();
-        var rows = await connection.QueryAsync<VisiblePersonRow>($"""
+        var rows = await connection.QueryAsync<VisiblePersonRow>("""
             SELECT DISTINCT
                 p.Id,
                 p.UserId,
@@ -194,10 +220,10 @@ public class PersonRepository
                 ON fm.FamilyId = c.TargetFamilyId
                AND fm.UserId = @UserId
             WHERE p.IsDeleted = 0
-              AND p.Id IN ({FamilyAuthorizationService.VisiblePeopleSql})
+              AND p.Id IN @Ids
             ORDER BY f.Name, p.FirstName, p.LastName
             """,
-            new { UserId = userId, TargetFamilyId = targetFamilyId });
+            new { Ids = visibleIds.ToList(), UserId = userId, TargetFamilyId = targetFamilyId });
         return rows.ToList();
     }
 
@@ -216,12 +242,15 @@ public class PersonRepository
     /// </summary>
     public async Task<IReadOnlyList<Person>> SearchVisibleAsync(string userId, string? query, int limit = 25)
     {
+        var visibleIds = await _visibility.GetVisiblePersonIdsAsync(userId);
+        if (visibleIds.Count == 0) return Array.Empty<Person>();
+
         using var connection = _factory.Create();
-        var rows = await connection.QueryAsync<Person>($"""
+        var rows = await connection.QueryAsync<Person>("""
             SELECT p.*
             FROM People p
             WHERE p.IsDeleted = 0
-              AND p.Id IN ({FamilyAuthorizationService.VisiblePeopleSql})
+              AND p.Id IN @Ids
               AND (
                     @Query IS NULL OR @Query = ''
                  OR p.FirstName LIKE @Like
@@ -234,7 +263,7 @@ public class PersonRepository
             """,
             new
             {
-                UserId = userId,
+                Ids = visibleIds.ToList(),
                 Query = query,
                 Like = $"%{query}%",
                 Limit = limit
@@ -252,15 +281,20 @@ public class PersonRepository
         var ids = personIds.Distinct(StringComparer.Ordinal).ToList();
         if (ids.Count == 0) return Array.Empty<Person>();
 
+        var visibleIds = await _visibility.GetVisiblePersonIdsAsync(userId);
+        if (visibleIds.Count == 0) return Array.Empty<Person>();
+
+        var allowed = ids.Where(visibleIds.Contains).ToList();
+        if (allowed.Count == 0) return Array.Empty<Person>();
+
         using var connection = _factory.Create();
-        var rows = await connection.QueryAsync<Person>($"""
+        var rows = await connection.QueryAsync<Person>("""
             SELECT p.*
             FROM People p
             WHERE p.IsDeleted = 0
               AND p.Id IN @Ids
-              AND p.Id IN ({FamilyAuthorizationService.VisiblePeopleSql})
             """,
-            new { UserId = userId, Ids = ids });
+            new { Ids = allowed });
         return rows.ToList();
     }
 

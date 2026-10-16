@@ -6,15 +6,9 @@ namespace GrowthLog.Web.Data.Authorization;
 /// <summary>
 /// Centralized server-side authorization for family data.
 ///
-/// Visibility rules (Phase 4):
-///   1. A user can see any person who is an active member of a family the
-///      user belongs to (any role).
-///   2. A user can see a person linked to their own account (People.UserId).
-///   3. A user can see a person who is a child in a family the user belongs
-///      to (parental rule — covered by rule 1).
-///   4. A user can see a person in a *connected* family if the source family
-///      has granted a matching SharingPermission (ViewChildren / ViewAdults /
-///      ViewAll) on the connection.
+/// Visibility is delegated entirely to <see cref="FamilyVisibilityService"/>,
+/// which is the single source of truth. This class only adds the mutation
+/// rules (who can edit a person / measurement / sharing settings).
 ///
 /// Mutation rules:
 ///   - A user can mutate a person if they hold Owner/Adult in a family the
@@ -24,10 +18,14 @@ namespace GrowthLog.Web.Data.Authorization;
 public class FamilyAuthorizationService
 {
     private readonly IDbConnectionFactory _factory;
+    private readonly FamilyVisibilityService _visibility;
 
-    public FamilyAuthorizationService(IDbConnectionFactory factory)
+    public FamilyAuthorizationService(
+        IDbConnectionFactory factory,
+        FamilyVisibilityService visibility)
     {
         _factory = factory;
+        _visibility = visibility;
     }
 
     public async Task<string?> GetRoleAsync(string userId, string familyId)
@@ -58,133 +56,13 @@ public class FamilyAuthorizationService
 
     /// <summary>
     /// Returns the set of person IDs the user is authorized to see.
-    /// This is the single source of truth for visibility and is used by
-    /// authorization-aware repository queries.
+    /// Delegates to <see cref="FamilyVisibilityService"/>.
     /// </summary>
-    public async Task<IReadOnlyCollection<string>> GetVisiblePersonIdsAsync(string userId)
-    {
-        using var connection = _factory.Create();
-        var rows = await connection.QueryAsync<string>(VisiblePeopleSql, new { UserId = userId });
-        return rows.ToHashSet(StringComparer.Ordinal);
-    }
+    public Task<IReadOnlyCollection<string>> GetVisiblePersonIdsAsync(string userId)
+        => _visibility.GetVisiblePersonIdsAsync(userId);
 
-    /// <summary>
-    /// SQL fragment that yields the IDs of every family the user can see.
-    /// This is the SINGLE source of truth for family visibility. Every
-    /// caller that lists families (family chips, family filter, family
-    /// picker, dashboard) MUST use this fragment — do not write a second
-    /// "list families" query anywhere else.
-    ///
-    /// A family is visible if and only if ONE of these is true:
-    ///
-    ///   (1) Membership: the user has a FamilyMembership row in the family.
-    ///
-    ///   (2) Sharing: there is an active FamilyConnection whose
-    ///       TargetFamilyId is a family the user belongs to (i.e. the user
-    ///       is on the RECEIVING side), AND that connection has at least one
-    ///       granted SharingPermission (IsGranted = 1). A connection alone
-    ///       never makes the family visible; a permission row with
-    ///       IsGranted = 0 never makes it visible either.
-    ///
-    /// Direction convention (matches FamilyConnection):
-    ///   SourceFamilyId = the family that OWNS the data being shared out.
-    ///   TargetFamilyId = the family that RECEIVES visibility.
-    ///
-    /// The unique index UX_SharingPermissions_Connection_Kind guarantees at
-    /// most one row per (connection, kind), so there is no "newest row wins"
-    /// logic here — a single IsGranted = 1 row is sufficient.
-    /// </summary>
-    public const string VisibleFamilyIdsSql = """
-        SELECT fm.FamilyId
-        FROM FamilyMemberships fm
-        WHERE fm.UserId = @UserId
-
-        UNION
-
-        SELECT c.SourceFamilyId
-        FROM FamilyConnections c
-        JOIN FamilyMemberships fm
-            ON fm.FamilyId = c.TargetFamilyId
-           AND fm.UserId = @UserId
-        WHERE c.IsActive = 1
-          AND EXISTS (
-              SELECT 1
-              FROM SharingPermissions sp
-              WHERE sp.FamilyConnectionId = c.Id
-                AND sp.IsGranted = 1
-                AND sp.PermissionKind IN ('ViewChildren', 'ViewAdults', 'ViewAll')
-          )
-        """;
-
-    /// <summary>
-    /// SQL fragment that yields the IDs of people visible to @UserId.
-    /// Kept as a constant so repositories can embed it directly in their
-    /// own queries (authorization-aware filtering at the database level).
-    ///
-    /// A person is visible if and only if they are an active member of a
-    /// family the user can see (see <see cref="VisibleFamilyIdsSql"/>), AND
-    /// one of:
-    ///
-    ///   (a) The user is a member of that family. Membership sees the family
-    ///       normally — no ViewChildren / ViewAdults restriction applies.
-    ///
-    ///   (b) Access to that family is via sharing only. In that case the
-    ///       granted permission kind must match the person's MembershipKind
-    ///       ('Child' or 'Adult'), or ViewAll must be granted.
-    ///
-    ///   (c) The person is linked to the user's own account, or was created
-    ///       by the user. This keeps orphaned/unassigned people reachable
-    ///       without making their family visible on the chips.
-    /// </summary>
-    public const string VisiblePeopleSql =
-        "SELECT DISTINCT p.Id " +
-        "FROM People p " +
-        "JOIN PersonFamilyMembership pfm " +
-        "    ON pfm.PersonId = p.Id " +
-        "   AND pfm.IsActive = 1 " +
-        "WHERE p.IsDeleted = 0 " +
-        "  AND pfm.FamilyId IN (SELECT vfid.FamilyId FROM (" + VisibleFamilyIdsSql + ") vfid) " +
-        "  AND ( " +
-        "        -- (a) The user is a member of this family: membership sees " +
-        "        --     the family normally, no kind restriction. " +
-        "        EXISTS ( " +
-        "            SELECT 1 FROM FamilyMemberships mine " +
-        "            WHERE mine.FamilyId = pfm.FamilyId " +
-        "              AND mine.UserId = @UserId " +
-        "        ) " +
-        "        -- (b) Access is via sharing only: apply the kind filter. " +
-        "        OR EXISTS ( " +
-        "            SELECT 1 " +
-        "            FROM FamilyConnections c " +
-        "            JOIN FamilyMemberships fm " +
-        "                ON fm.FamilyId = c.TargetFamilyId " +
-        "               AND fm.UserId = @UserId " +
-        "            JOIN SharingPermissions sp " +
-        "                ON sp.FamilyConnectionId = c.Id " +
-        "               AND sp.IsGranted = 1 " +
-        "            WHERE c.SourceFamilyId = pfm.FamilyId " +
-        "              AND c.IsActive = 1 " +
-        "              AND ( " +
-        "                    sp.PermissionKind = 'ViewAll' " +
-        "                 OR (sp.PermissionKind = 'ViewChildren' AND pfm.MembershipKind = 'Child') " +
-        "                 OR (sp.PermissionKind = 'ViewAdults'   AND pfm.MembershipKind = 'Adult') " +
-        "              ) " +
-        "        ) " +
-        "        -- (c) Orphan safety net: the person is linked to the user's " +
-        "        --     account or was created by the user. This does NOT make " +
-        "        --     the family visible on the chips. " +
-        "        OR p.UserId = @UserId " +
-        "        OR p.CreatedByUserId = @UserId " +
-        "  )\n";
-
-    public async Task<bool> CanViewPersonAsync(string userId, string personId)
-    {
-        using var connection = _factory.Create();
-        var count = await connection.ExecuteScalarAsync<int>(
-            $"SELECT COUNT(1) FROM ({VisiblePeopleSql}) v WHERE v.Id = @PersonId",
-            new { UserId = userId, PersonId = personId });
-        return count > 0;
-    }
+    public Task<bool> CanViewPersonAsync(string userId, string personId)
+        => _visibility.CanViewPersonAsync(userId, personId);
 
     /// <summary>
     /// A user may mutate a person if they hold a mutating role in any family

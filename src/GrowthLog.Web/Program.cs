@@ -54,6 +54,7 @@ builder.Services.AddScoped<FamilyConnectionRepository>();
 builder.Services.AddScoped<FamilyDiscoveryRepository>();
 builder.Services.AddScoped<SharingPermissionRepository>();
 builder.Services.AddScoped<InvitationRepository>();
+builder.Services.AddScoped<FamilyVisibilityService>();
 builder.Services.AddScoped<FamilyAuthorizationService>();
 builder.Services.AddScoped<ChartDataService>();
 

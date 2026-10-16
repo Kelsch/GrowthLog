@@ -20,10 +20,14 @@ public class VisibleFamilyRow
 public class FamilyRepository
 {
     private readonly IDbConnectionFactory _factory;
+    private readonly FamilyVisibilityService _visibility;
 
-    public FamilyRepository(IDbConnectionFactory factory)
+    public FamilyRepository(
+        IDbConnectionFactory factory,
+        FamilyVisibilityService visibility)
     {
         _factory = factory;
+        _visibility = visibility;
     }
 
     public async Task<Family?> GetByIdAsync(string id)
@@ -54,39 +58,37 @@ public class FamilyRepository
     /// /compare both call it via CompareGrowth.razor).
     ///
     /// Visibility is delegated entirely to
-    /// <see cref="FamilyAuthorizationService.VisibleFamilyIdsSql"/>, which
-    /// implements exactly two rules:
-    ///
-    ///   (1) Membership: the user has a FamilyMembership in the family.
-    ///   (2) Sharing: the family is the Source of an active FamilyConnection
-    ///       whose Target family the user belongs to, AND that connection has
-    ///       at least one effective granted SharingPermission.
-    ///
-    /// A family with no granted permission (all toggles off, or no rows) is
-    /// NOT returned. A family the user has no relationship to is NOT
-    /// returned. There is no other path that lists families.
+    /// <see cref="FamilyVisibilityService.GetAccessMapAsync"/>. The access
+    /// map keys are the visible family IDs; a family is "shared" when the
+    /// user is not a member of it.
     ///
     /// Membership-only callers should keep using GetForUserAsync.
     /// </summary>
     public async Task<IReadOnlyList<VisibleFamilyRow>> GetVisibleForUserAsync(string userId)
     {
+        var accessMap = await _visibility.GetAccessMapAsync(userId);
+        if (accessMap.Count == 0) return Array.Empty<VisibleFamilyRow>();
+
         using var connection = _factory.Create();
-        var rows = await connection.QueryAsync<VisibleFamilyRow>($"""
+        var rows = await connection.QueryAsync<VisibleFamilyRow>("""
             SELECT
                 f.Id,
                 f.Name,
                 f.CreatedUtc,
-                f.IsDeleted,
-                CASE WHEN fm.UserId IS NULL THEN 1 ELSE 0 END AS IsShared
+                f.IsDeleted
             FROM Families f
-            LEFT JOIN FamilyMemberships fm
-                ON fm.FamilyId = f.Id
-               AND fm.UserId = @UserId
-            WHERE f.Id IN ({FamilyAuthorizationService.VisibleFamilyIdsSql})
+            WHERE f.Id IN @FamilyIds
             ORDER BY f.Name
             """,
-            new { UserId = userId });
-        return rows.ToList();
+            new { FamilyIds = accessMap.Keys.ToList() });
+
+        return rows
+            .Select(r =>
+            {
+                r.IsShared = accessMap[r.Id] is FamilyAccess.Shared;
+                return r;
+            })
+            .ToList();
     }
 
     public async Task<string> CreateAsync(string name, string ownerUserId)
