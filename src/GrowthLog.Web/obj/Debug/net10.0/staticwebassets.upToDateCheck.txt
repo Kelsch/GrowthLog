@@ -1,0 +1,6 @@
+wwwroot\app.css
+D:\NuGet\Packages\microsoft.aspnetcore.app.internal.assets\10.0.12\build\..\_framework\blazor.web.js
+D:\NuGet\Packages\microsoft.aspnetcore.app.internal.assets\10.0.12\build\..\_framework\blazor.server.js
+D:\NuGet\Packages\microsoft.aspnetcore.app.internal.assets\10.0.12\_framework\blazor.server.js
+D:\NuGet\Packages\microsoft.aspnetcore.app.internal.assets\10.0.12\_framework\blazor.web.js
+E:\Source\Repos\Kelsch\GrowthLog\src\GrowthLog.Web\wwwroot\app.css

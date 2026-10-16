@@ -60,7 +60,7 @@ public class FamilyConnectionRepository
             LEFT JOIN SharingPermissions vall
                 ON vall.FamilyConnectionId = c.Id
                AND vall.PermissionKind = 'ViewAll'
-            WHERE c.SourceFamilyId = @SourceFamilyId
+            WHERE c.SourceFamilyId = @SourceFamilyId AND t.IsDeleted = 0
             ORDER BY t.Name
             """,
             new { SourceFamilyId = sourceFamilyId });

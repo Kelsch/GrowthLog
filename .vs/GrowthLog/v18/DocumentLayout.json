@@ -3,16 +3,28 @@
   "WorkspaceRootPath": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|e:\\source\\repos\\kelsch\\growthlog\\src\\growthlog.web\\components\\pages\\compare\\compare.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
-      "RelativeMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|solutionrelative:src\\growthlog.web\\components\\pages\\compare\\compare.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|e:\\source\\repos\\kelsch\\growthlog\\src\\growthlog.web\\wwwroot\\app.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
-      "RelativeMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|solutionrelative:src\\growthlog.web\\wwwroot\\app.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+      "AbsoluteMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|e:\\source\\repos\\kelsch\\growthlog\\src\\growthlog.web\\components\\shared\\comparegrowth.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|solutionrelative:src\\growthlog.web\\components\\shared\\comparegrowth.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|e:\\source\\repos\\kelsch\\growthlog\\src\\growthlog.web\\components\\pages\\home.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
       "RelativeMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|solutionrelative:src\\growthlog.web\\components\\pages\\home.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|e:\\source\\repos\\kelsch\\growthlog\\src\\growthlog.web\\data\\repositories\\personrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|solutionrelative:src\\growthlog.web\\data\\repositories\\personrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|e:\\source\\repos\\kelsch\\growthlog\\src\\growthlog.web\\data\\repositories\\familyconnectionrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|solutionrelative:src\\growthlog.web\\data\\repositories\\familyconnectionrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|e:\\source\\repos\\kelsch\\growthlog\\src\\growthlog.web\\data\\authorization\\familyauthorizationservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|solutionrelative:src\\growthlog.web\\data\\authorization\\familyauthorizationservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|e:\\source\\repos\\kelsch\\growthlog\\src\\growthlog.web\\components\\pages\\people\\peoplelist.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}|src\\GrowthLog.Web\\GrowthLog.Web.csproj|solutionrelative:src\\growthlog.web\\components\\pages\\people\\peoplelist.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
     }
   ],
   "DocumentGroupContainers": [
@@ -22,34 +34,8 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": 9,
           "Children": [
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "app.css",
-              "DocumentMoniker": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\wwwroot\\app.css",
-              "RelativeDocumentMoniker": "src\\GrowthLog.Web\\wwwroot\\app.css",
-              "ToolTip": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\wwwroot\\app.css",
-              "RelativeToolTip": "src\\GrowthLog.Web\\wwwroot\\app.css",
-              "ViewState": "AgIAAPoDAAAAAAAAAAAawCAAAAAVAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
-              "WhenOpened": "2026-10-03T15:46:44.488Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "Compare.razor",
-              "DocumentMoniker": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\Components\\Pages\\Compare\\Compare.razor",
-              "RelativeDocumentMoniker": "src\\GrowthLog.Web\\Components\\Pages\\Compare\\Compare.razor",
-              "ToolTip": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\Components\\Pages\\Compare\\Compare.razor",
-              "RelativeToolTip": "src\\GrowthLog.Web\\Components\\Pages\\Compare\\Compare.razor",
-              "ViewState": "AgIAAKYAAAAAAAAAAAAawMEAAAAFAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
-              "WhenOpened": "2026-10-03T15:44:11.159Z",
-              "EditorCaption": ""
-            },
             {
               "$type": "Bookmark",
               "Name": "ST:129:0:{75188d03-9892-4ae2-abf1-207126247ce5}"
@@ -68,15 +54,80 @@
             },
             {
               "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "FamilyConnectionRepository.cs",
+              "DocumentMoniker": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\Data\\Repositories\\FamilyConnectionRepository.cs",
+              "RelativeDocumentMoniker": "src\\GrowthLog.Web\\Data\\Repositories\\FamilyConnectionRepository.cs",
+              "ToolTip": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\Data\\Repositories\\FamilyConnectionRepository.cs",
+              "RelativeToolTip": "src\\GrowthLog.Web\\Data\\Repositories\\FamilyConnectionRepository.cs",
+              "ViewState": "AgIAAB4AAAAAAAAAAAAowDQAAAAZAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-16T17:12:09.79Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "FamilyAuthorizationService.cs",
+              "DocumentMoniker": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\Data\\Authorization\\FamilyAuthorizationService.cs",
+              "RelativeDocumentMoniker": "src\\GrowthLog.Web\\Data\\Authorization\\FamilyAuthorizationService.cs",
+              "ToolTip": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\Data\\Authorization\\FamilyAuthorizationService.cs",
+              "RelativeToolTip": "src\\GrowthLog.Web\\Data\\Authorization\\FamilyAuthorizationService.cs",
+              "ViewState": "AgIAACIAAAAAAAAAAAAAACIAAAAkAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-16T17:12:08.454Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
               "DocumentIndex": 2,
+              "Title": "PersonRepository.cs",
+              "DocumentMoniker": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\Data\\Repositories\\PersonRepository.cs",
+              "RelativeDocumentMoniker": "src\\GrowthLog.Web\\Data\\Repositories\\PersonRepository.cs",
+              "ToolTip": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\Data\\Repositories\\PersonRepository.cs",
+              "RelativeToolTip": "src\\GrowthLog.Web\\Data\\Repositories\\PersonRepository.cs",
+              "ViewState": "AgIAAD0AAAAAAAAAAAAAAFAAAAAyAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-16T16:02:36.109Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "PeopleList.razor",
+              "DocumentMoniker": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\Components\\Pages\\People\\PeopleList.razor",
+              "RelativeDocumentMoniker": "src\\GrowthLog.Web\\Components\\Pages\\People\\PeopleList.razor",
+              "ToolTip": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\Components\\Pages\\People\\PeopleList.razor",
+              "RelativeToolTip": "src\\GrowthLog.Web\\Components\\Pages\\People\\PeopleList.razor",
+              "ViewState": "AgIAAEEAAAAAAAAAAAAAAEEAAAA9AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-10-16T16:02:34.677Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
               "Title": "Home.razor",
               "DocumentMoniker": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\Components\\Pages\\Home.razor",
               "RelativeDocumentMoniker": "src\\GrowthLog.Web\\Components\\Pages\\Home.razor",
               "ToolTip": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\Components\\Pages\\Home.razor",
               "RelativeToolTip": "src\\GrowthLog.Web\\Components\\Pages\\Home.razor",
-              "ViewState": "AgIAAMoAAAAAAAAAAAAawAYBAABdAAAAAAAAAA==",
+              "ViewState": "AgIAACEBAAAAAAAAAAAowEEBAAAXAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
-              "WhenOpened": "2026-10-03T15:43:14.95Z",
+              "WhenOpened": "2026-10-16T16:02:32.285Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "CompareGrowth.razor",
+              "DocumentMoniker": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\Components\\Shared\\CompareGrowth.razor",
+              "RelativeDocumentMoniker": "src\\GrowthLog.Web\\Components\\Shared\\CompareGrowth.razor",
+              "ToolTip": "E:\\Source\\Repos\\Kelsch\\GrowthLog\\src\\GrowthLog.Web\\Components\\Shared\\CompareGrowth.razor",
+              "RelativeToolTip": "src\\GrowthLog.Web\\Components\\Shared\\CompareGrowth.razor",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACYAAABIAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-10-16T15:51:38.967Z",
               "EditorCaption": ""
             }
           ]
