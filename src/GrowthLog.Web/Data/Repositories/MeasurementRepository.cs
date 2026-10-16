@@ -17,10 +17,14 @@ public class MeasurementSummary
 public class MeasurementRepository
 {
     private readonly IDbConnectionFactory _factory;
+    private readonly FamilyVisibilityService _visibility;
 
-    public MeasurementRepository(IDbConnectionFactory factory)
+    public MeasurementRepository(
+        IDbConnectionFactory factory,
+        FamilyVisibilityService visibility)
     {
         _factory = factory;
+        _visibility = visibility;
     }
 
     /// <summary>
@@ -29,15 +33,18 @@ public class MeasurementRepository
     /// </summary>
     public async Task<IReadOnlyList<Measurement>> GetVisibleForUserAsync(string userId)
     {
+        var visibleIds = await _visibility.GetVisiblePersonIdsAsync(userId);
+        if (visibleIds.Count == 0) return Array.Empty<Measurement>();
+
         using var connection = _factory.Create();
-        var rows = await connection.QueryAsync<Measurement>($"""
+        var rows = await connection.QueryAsync<Measurement>("""
             SELECT m.*
             FROM Measurements m
             WHERE m.IsDeleted = 0
-              AND m.PersonId IN ({FamilyAuthorizationService.VisiblePeopleSql})
+              AND m.PersonId IN @Ids
             ORDER BY m.MeasurementDate DESC
             """,
-            new { UserId = userId });
+            new { Ids = visibleIds.ToList() });
         return rows.ToList();
     }
 
@@ -56,16 +63,19 @@ public class MeasurementRepository
     /// </summary>
     public async Task<IReadOnlyList<Measurement>> GetRecentVisibleForUserAsync(string userId, int limit = 10)
     {
+        var visibleIds = await _visibility.GetVisiblePersonIdsAsync(userId);
+        if (visibleIds.Count == 0) return Array.Empty<Measurement>();
+
         using var connection = _factory.Create();
-        var rows = await connection.QueryAsync<Measurement>($"""
+        var rows = await connection.QueryAsync<Measurement>("""
             SELECT m.*
             FROM Measurements m
             WHERE m.IsDeleted = 0
-              AND m.PersonId IN ({FamilyAuthorizationService.VisiblePeopleSql})
+              AND m.PersonId IN @Ids
             ORDER BY m.MeasurementDate DESC
             LIMIT @Limit
             """,
-            new { UserId = userId, Limit = limit });
+            new { Ids = visibleIds.ToList(), Limit = limit });
         return rows.ToList();
     }
 
@@ -77,17 +87,20 @@ public class MeasurementRepository
     /// </summary>
     public async Task<MeasurementSummary> GetVisibleSummaryAsync(string userId)
     {
+        var visibleIds = await _visibility.GetVisiblePersonIdsAsync(userId);
+        if (visibleIds.Count == 0) return new MeasurementSummary();
+
         using var connection = _factory.Create();
-        var row = await connection.QuerySingleAsync<MeasurementSummary>($"""
+        var row = await connection.QuerySingleAsync<MeasurementSummary>("""
             SELECT
                 COUNT(1) AS MeasurementCount,
                 MIN(m.MeasurementDate) AS EarliestDate,
                 MAX(m.MeasurementDate) AS LatestDate
             FROM Measurements m
             WHERE m.IsDeleted = 0
-              AND m.PersonId IN ({FamilyAuthorizationService.VisiblePeopleSql})
+              AND m.PersonId IN @Ids
             """,
-            new { UserId = userId });
+            new { Ids = visibleIds.ToList() });
         return row;
     }
 
@@ -97,16 +110,18 @@ public class MeasurementRepository
     /// </summary>
     public async Task<IReadOnlyList<Measurement>> GetVisibleForUserForPersonAsync(string userId, string personId)
     {
+        var visibleIds = await _visibility.GetVisiblePersonIdsAsync(userId);
+        if (!visibleIds.Contains(personId)) return Array.Empty<Measurement>();
+
         using var connection = _factory.Create();
-        var rows = await connection.QueryAsync<Measurement>($"""
+        var rows = await connection.QueryAsync<Measurement>("""
             SELECT m.*
             FROM Measurements m
             WHERE m.PersonId = @PersonId
               AND m.IsDeleted = 0
-              AND m.PersonId IN ({FamilyAuthorizationService.VisiblePeopleSql})
             ORDER BY m.MeasurementDate DESC
             """,
-            new { UserId = userId, PersonId = personId });
+            new { PersonId = personId });
         return rows.ToList();
     }
 
@@ -118,15 +133,18 @@ public class MeasurementRepository
     /// </summary>
     public async Task<IReadOnlyDictionary<string, string>> GetLatestDatePerVisiblePersonAsync(string userId)
     {
+        var visibleIds = await _visibility.GetVisiblePersonIdsAsync(userId);
+        if (visibleIds.Count == 0) return new Dictionary<string, string>(StringComparer.Ordinal);
+
         using var connection = _factory.Create();
-        var rows = await connection.QueryAsync<(string PersonId, string MaxDate)>($"""
+        var rows = await connection.QueryAsync<(string PersonId, string MaxDate)>("""
             SELECT m.PersonId, MAX(m.MeasurementDate) AS MaxDate
             FROM Measurements m
             WHERE m.IsDeleted = 0
-              AND m.PersonId IN ({FamilyAuthorizationService.VisiblePeopleSql})
+              AND m.PersonId IN @Ids
             GROUP BY m.PersonId
             """,
-            new { UserId = userId });
+            new { Ids = visibleIds.ToList() });
 
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var row in rows)
@@ -148,8 +166,14 @@ public class MeasurementRepository
         var ids = personIds.Distinct(StringComparer.Ordinal).ToList();
         if (ids.Count == 0) return new Dictionary<string, Measurement>(StringComparer.Ordinal);
 
+        var visibleIds = await _visibility.GetVisiblePersonIdsAsync(userId);
+        if (visibleIds.Count == 0) return new Dictionary<string, Measurement>(StringComparer.Ordinal);
+
+        var allowed = ids.Where(visibleIds.Contains).ToList();
+        if (allowed.Count == 0) return new Dictionary<string, Measurement>(StringComparer.Ordinal);
+
         using var connection = _factory.Create();
-        var rows = await connection.QueryAsync<Measurement>($"""
+        var rows = await connection.QueryAsync<Measurement>("""
             SELECT m.*
             FROM Measurements m
             JOIN (
@@ -162,9 +186,8 @@ public class MeasurementRepository
               ON latest.PersonId = m.PersonId
              AND latest.MaxDate = m.MeasurementDate
             WHERE m.IsDeleted = 0
-              AND m.PersonId IN ({FamilyAuthorizationService.VisiblePeopleSql})
             """,
-            new { UserId = userId, Ids = ids });
+            new { Ids = allowed });
 
         var result = new Dictionary<string, Measurement>(StringComparer.Ordinal);
         foreach (var m in rows)
