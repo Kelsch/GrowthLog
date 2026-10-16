@@ -32,10 +32,25 @@ public abstract record FamilyAccess
 ///   (1) Membership: the user has a FamilyMembership in the family.
 ///       → sees all active people in that family.
 ///   (2) Sharing: the family is the Source of an active FamilyConnection
-///       whose Target family the user belongs to, AND that connection has
-///       at least one granted SharingPermission (IsGranted = 1).
+///       whose Target family the user is a DIRECT MEMBER of, AND that
+///       connection has at least one granted SharingPermission
+///       (IsGranted = 1).
 ///       → sees only people whose MembershipKind matches the granted kinds
 ///         (ViewAll grants both).
+///
+/// Sharing is non-transitive. The recipient side of a share is always a
+/// direct FamilyMembership in the connection's TargetFamilyId — never
+/// "a family the user can see by any means". We do NOT walk chains of
+/// FamilyConnections. Concretely:
+///
+///   * If P shares into T (user is a member of T), the user sees P.
+///   * If M shares into P, the user does NOT see M just because they see P.
+///     Seeing P via sharing does not make the user a member of P, so the
+///     M→P connection's TargetFamilyId (P) is not a family the user is a
+///     member of, and M is correctly excluded.
+///
+/// Membership is likewise direct: being a member of F sees F, and nothing
+/// else. There is no closure over either relation.
 /// </summary>
 public class FamilyVisibilityService
 {
@@ -49,12 +64,17 @@ public class FamilyVisibilityService
     /// <summary>
     /// Returns the access map for the user: familyId → FamilyAccess.
     /// Membership wins over sharing when both apply.
+    ///
+    /// Sharing is non-transitive: the recipient side of a share is a direct
+    /// FamilyMembership in the connection's TargetFamilyId. We never treat
+    /// "families the user can see by any means" as the recipient set, and we
+    /// never walk chains of FamilyConnections.
     /// </summary>
     public async Task<IReadOnlyDictionary<string, FamilyAccess>> GetAccessMapAsync(string userId)
     {
         using var connection = _factory.Create();
 
-        // Step 1: membership families.
+        // Step 1: membership families. Direct membership only — no closure.
         var memberFamilyIds = (await connection.QueryAsync<string>("""
             SELECT fm.FamilyId
             FROM FamilyMemberships fm
@@ -63,6 +83,13 @@ public class FamilyVisibilityService
             new { UserId = userId })).ToList();
 
         // Step 2: shared sources with granted-kind flags.
+        //
+        // The recipient side is a DIRECT FamilyMembership in the connection's
+        // TargetFamilyId (fm.FamilyId = c.TargetFamilyId AND fm.UserId = @UserId).
+        // This is the one-hop rule: a user sees Source S only if they are a
+        // member of the Target T of an active S→T connection with a granted
+        // permission. Seeing T via sharing does NOT make the user a member of
+        // T, so it cannot unlock a further hop. Sharing is non-transitive.
         var sharedRows = (await connection.QueryAsync<SharedRow>("""
             SELECT
                 c.SourceFamilyId,
@@ -115,6 +142,11 @@ public class FamilyVisibilityService
     /// <summary>
     /// Returns the IDs of people visible to the user, applying the kind
     /// filter for shared families.
+    ///
+    /// The family set is exactly the access-map keys: membership families
+    /// plus the Sources of direct one-hop shares into families the user is a
+    /// member of. Sharing is non-transitive — no family reached only via a
+    /// chain of connections is ever included.
     /// </summary>
     public async Task<IReadOnlyCollection<string>> GetVisiblePersonIdsAsync(string userId)
     {
@@ -123,7 +155,8 @@ public class FamilyVisibilityService
 
         using var connection = _factory.Create();
 
-        // Step 4: people in access-map families.
+        // Step 4: people in access-map families (membership ∪ direct-share
+        // sources). No transitive families are in map.Keys by construction.
         var rows = (await connection.QueryAsync<PersonRow>("""
             SELECT p.Id, pfm.FamilyId, pfm.MembershipKind
             FROM People p
@@ -135,7 +168,8 @@ public class FamilyVisibilityService
             """,
             new { FamilyIds = map.Keys.ToList() })).ToList();
 
-        // Step 5: filter shared families by MembershipKind.
+        // Step 5: filter shared families by MembershipKind. The kind filter
+        // is derived from the direct connection only — never from a chain.
         var visible = new HashSet<string>(StringComparer.Ordinal);
         foreach (var row in rows)
         {
