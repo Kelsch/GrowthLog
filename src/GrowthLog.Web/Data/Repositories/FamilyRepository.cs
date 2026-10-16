@@ -54,7 +54,7 @@ public class FamilyRepository
     /// /compare both call it via CompareGrowth.razor).
     ///
     /// Visibility is delegated entirely to
-    /// <see cref="FamilyAuthorizationService.VisibleFamiliesSql"/>, which
+    /// <see cref="FamilyAuthorizationService.VisibleFamilyIdsSql"/>, which
     /// implements exactly two rules:
     ///
     ///   (1) Membership: the user has a FamilyMembership in the family.
@@ -82,7 +82,7 @@ public class FamilyRepository
             LEFT JOIN FamilyMemberships fm
                 ON fm.FamilyId = f.Id
                AND fm.UserId = @UserId
-            WHERE f.Id IN ({FamilyAuthorizationService.VisibleFamiliesSql})
+            WHERE f.Id IN ({FamilyAuthorizationService.VisibleFamilyIdsSql})
             ORDER BY f.Name
             """,
             new { UserId = userId });

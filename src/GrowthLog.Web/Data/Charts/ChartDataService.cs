@@ -38,7 +38,7 @@ public class ChartDataService
         using var connection = _factory.Create();
 
         // The family filter is intersected with the user's *visible* families
-        // (membership + kind-aware sharing) before it is used. This means a
+        // (membership + granted sharing) before it is used. This means a
         // caller cannot widen visibility by passing a familyId the user has
         // no granted permission for — the family is simply dropped from the
         // filter, and the VisiblePeopleSql predicate below still excludes its
@@ -46,14 +46,11 @@ public class ChartDataService
         HashSet<string>? familyFilter = null;
         if (familyIds is { Count: > 0 })
         {
-            // Use the single source of truth for family visibility. A family
-            // the user cannot see (no membership, no effective sharing grant)
-            // is dropped from the filter, and the VisiblePeopleSql predicate
-            // below still excludes its people.
+            // Use the single source of truth for family visibility.
             var visibleFamilyIds = await connection.QueryAsync<string>($"""
                 SELECT f.Id
                 FROM Families f
-                WHERE f.Id IN ({FamilyAuthorizationService.VisibleFamiliesSql})
+                WHERE f.Id IN ({FamilyAuthorizationService.VisibleFamilyIdsSql})
                 """,
                 new { UserId = userId });
 

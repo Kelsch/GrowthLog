@@ -144,13 +144,10 @@ public class PersonRepository
             JOIN Families f ON f.Id = pfm.FamilyId AND f.IsDeleted = 0
             LEFT JOIN FamilyMemberships fm ON fm.FamilyId = pfm.FamilyId AND fm.UserId = @UserId
             WHERE p.IsDeleted = 0
-              -- The person's family must itself be visible to the user
-              -- (membership OR effective sharing grant). This is the same
-              -- fragment the family chips use, so a person can never appear
-              -- under a family that is not in the chip list.
-              AND pfm.FamilyId IN ({FamilyAuthorizationService.VisibleFamiliesSql})
-              -- And the person must be visible under the kind-aware rule
-              -- (ViewChildren / ViewAdults / ViewAll).
+              -- VisiblePeopleSql already requires the person's family to be
+              -- visible (membership OR granted sharing) AND applies the
+              -- kind filter when access is via sharing only. No second
+              -- family-visibility clause is needed here.
               AND p.Id IN ({FamilyAuthorizationService.VisiblePeopleSql})
             ORDER BY f.Name, p.FirstName, p.LastName
             """,

@@ -26,12 +26,12 @@ public class FamilyConnectionRepository
     /// </summary>
     /// <summary>
     /// Connections where the given family is the source (i.e. the family
-    /// that owns the data being shared out), with the *effective* permission
-    /// state for each kind.
+    /// that owns the data being shared out), with the permission state for
+    /// each kind.
     ///
-    /// "Effective" means the newest SharingPermissions row for the
-    /// (connection, kind) pair — ordered by UpdatedUtc DESC, rowid DESC so
-    /// same-millisecond toggles resolve deterministically. This matches the
+    /// The unique index UX_SharingPermissions_Connection_Kind guarantees at
+    /// most one row per (connection, kind), so a simple LEFT JOIN is enough
+    /// — no "newest row wins" subquery is needed. This matches the
     /// authorization SQL exactly, so the checkbox state shown in the UI is
     /// the same state the visibility queries use.
     /// </summary>
@@ -46,32 +46,20 @@ public class FamilyConnectionRepository
                 t.Name AS TargetFamilyName,
                 c.Label,
                 c.IsActive,
-                COALESCE((
-                    SELECT p.IsGranted
-                    FROM SharingPermissions p
-                    WHERE p.FamilyConnectionId = c.Id
-                      AND p.PermissionKind = 'ViewChildren'
-                    ORDER BY p.UpdatedUtc DESC, p.rowid DESC
-                    LIMIT 1
-                ), 0) AS ViewChildren,
-                COALESCE((
-                    SELECT p.IsGranted
-                    FROM SharingPermissions p
-                    WHERE p.FamilyConnectionId = c.Id
-                      AND p.PermissionKind = 'ViewAdults'
-                    ORDER BY p.UpdatedUtc DESC, p.rowid DESC
-                    LIMIT 1
-                ), 0) AS ViewAdults,
-                COALESCE((
-                    SELECT p.IsGranted
-                    FROM SharingPermissions p
-                    WHERE p.FamilyConnectionId = c.Id
-                      AND p.PermissionKind = 'ViewAll'
-                    ORDER BY p.UpdatedUtc DESC, p.rowid DESC
-                    LIMIT 1
-                ), 0) AS ViewAll
+                COALESCE(vc.IsGranted, 0) AS ViewChildren,
+                COALESCE(va.IsGranted, 0) AS ViewAdults,
+                COALESCE(vall.IsGranted, 0) AS ViewAll
             FROM FamilyConnections c
             JOIN Families t ON t.Id = c.TargetFamilyId
+            LEFT JOIN SharingPermissions vc
+                ON vc.FamilyConnectionId = c.Id
+               AND vc.PermissionKind = 'ViewChildren'
+            LEFT JOIN SharingPermissions va
+                ON va.FamilyConnectionId = c.Id
+               AND va.PermissionKind = 'ViewAdults'
+            LEFT JOIN SharingPermissions vall
+                ON vall.FamilyConnectionId = c.Id
+               AND vall.PermissionKind = 'ViewAll'
             WHERE c.SourceFamilyId = @SourceFamilyId
             ORDER BY t.Name
             """,
