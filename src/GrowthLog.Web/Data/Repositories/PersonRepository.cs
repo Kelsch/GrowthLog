@@ -182,12 +182,17 @@ public class PersonRepository
     /// Returns people from *connected source families* that are shared into
     /// the given family (i.e. the given family is the Target of a
     /// FamilyConnection with a granted SharingPermission). Used by the family
-    /// detail page so every member of the receiving family sees shared people.
+    /// detail page.
+    ///
+    /// Share grants apply to target-family Owners only (not all target
+    /// members). The join on FamilyMemberships therefore requires
+    /// Role = 'Owner' — a Viewer/Child/Adult member of the target family
+    /// does not see shared people through this path.
     ///
     /// The kind filter (ViewChildren / ViewAdults / ViewAll) is applied by
-    /// <see cref="FamilyAuthorizationService.VisiblePeopleSql"/>; the extra
-    /// predicate here only narrows to the specific target family. This keeps
-    /// the family detail page consistent with Home and Compare.
+    /// <see cref="FamilyVisibilityService.GetVisiblePersonIdsAsync"/>; the
+    /// extra predicate here only narrows to the specific target family. This
+    /// keeps the family detail page consistent with Home and Compare.
     /// </summary>
     public async Task<IReadOnlyList<VisiblePersonRow>> GetSharedIntoFamilyAsync(string userId, string targetFamilyId)
     {
@@ -219,6 +224,7 @@ public class PersonRepository
             JOIN FamilyMemberships fm
                 ON fm.FamilyId = c.TargetFamilyId
                AND fm.UserId = @UserId
+               AND fm.Role = 'Owner'
             WHERE p.IsDeleted = 0
               AND p.Id IN @Ids
             ORDER BY f.Name, p.FirstName, p.LastName

@@ -32,22 +32,26 @@ public abstract record FamilyAccess
 ///   (1) Membership: the user has a FamilyMembership in the family.
 ///       → sees all active people in that family.
 ///   (2) Sharing: the family is the Source of an active FamilyConnection
-///       whose Target family the user is a DIRECT MEMBER of, AND that
-///       connection has at least one granted SharingPermission
-///       (IsGranted = 1).
+///       whose Target family the user is an OWNER of, AND that connection
+///       has at least one granted SharingPermission (IsGranted = 1).
 ///       → sees only people whose MembershipKind matches the granted kinds
 ///         (ViewAll grants both).
+///
+/// Share grants apply to target-family Owners only (not all target members).
+/// A user who is merely a Viewer/Child/Adult member of the Target family
+/// does NOT receive the share. This prevents a share into "Parents' family"
+/// from leaking to every sibling who happens to be a member of that family.
 ///
 /// Sharing is non-transitive. The recipient side of a share is always a
 /// direct FamilyMembership in the connection's TargetFamilyId — never
 /// "a family the user can see by any means". We do NOT walk chains of
 /// FamilyConnections. Concretely:
 ///
-///   * If P shares into T (user is a member of T), the user sees P.
+///   * If P shares into T and the user is an Owner of T, the user sees P.
 ///   * If M shares into P, the user does NOT see M just because they see P.
-///     Seeing P via sharing does not make the user a member of P, so the
-///     M→P connection's TargetFamilyId (P) is not a family the user is a
-///     member of, and M is correctly excluded.
+///     Seeing P via sharing does not make the user an Owner of P, so the
+///     M→P connection's TargetFamilyId (P) is not a family the user owns,
+///     and M is correctly excluded.
 ///
 /// Membership is likewise direct: being a member of F sees F, and nothing
 /// else. There is no closure over either relation.
@@ -65,10 +69,11 @@ public class FamilyVisibilityService
     /// Returns the access map for the user: familyId → FamilyAccess.
     /// Membership wins over sharing when both apply.
     ///
-    /// Sharing is non-transitive: the recipient side of a share is a direct
-    /// FamilyMembership in the connection's TargetFamilyId. We never treat
-    /// "families the user can see by any means" as the recipient set, and we
-    /// never walk chains of FamilyConnections.
+    /// Share grants apply to target-family Owners only (not all target
+    /// members). The recipient side of a share is a direct FamilyMembership
+    /// in the connection's TargetFamilyId with Role = 'Owner'. We never
+    /// treat "families the user can see by any means" as the recipient set,
+    /// and we never walk chains of FamilyConnections.
     /// </summary>
     public async Task<IReadOnlyDictionary<string, FamilyAccess>> GetAccessMapAsync(string userId)
     {
@@ -84,11 +89,15 @@ public class FamilyVisibilityService
 
         // Step 2: shared sources with granted-kind flags.
         //
-        // The recipient side is a DIRECT FamilyMembership in the connection's
-        // TargetFamilyId (fm.FamilyId = c.TargetFamilyId AND fm.UserId = @UserId).
-        // This is the one-hop rule: a user sees Source S only if they are a
-        // member of the Target T of an active S→T connection with a granted
-        // permission. Seeing T via sharing does NOT make the user a member of
+        // Share grants apply to target-family Owners only (not all target
+        // members). The recipient side is a DIRECT FamilyMembership in the
+        // connection's TargetFamilyId with Role = 'Owner'
+        // (fm.FamilyId = c.TargetFamilyId AND fm.UserId = @UserId
+        //  AND fm.Role = 'Owner').
+        //
+        // This is the one-hop rule: a user sees Source S only if they are an
+        // Owner of the Target T of an active S→T connection with a granted
+        // permission. Seeing T via sharing does NOT make the user an Owner of
         // T, so it cannot unlock a further hop. Sharing is non-transitive.
         var sharedRows = (await connection.QueryAsync<SharedRow>("""
             SELECT
@@ -100,6 +109,7 @@ public class FamilyVisibilityService
             JOIN FamilyMemberships fm
                 ON fm.FamilyId = c.TargetFamilyId
                AND fm.UserId = @UserId
+               AND fm.Role = 'Owner'
             JOIN SharingPermissions sp
                 ON sp.FamilyConnectionId = c.Id
             WHERE c.IsActive = 1
@@ -144,9 +154,10 @@ public class FamilyVisibilityService
     /// filter for shared families.
     ///
     /// The family set is exactly the access-map keys: membership families
-    /// plus the Sources of direct one-hop shares into families the user is a
-    /// member of. Sharing is non-transitive — no family reached only via a
-    /// chain of connections is ever included.
+    /// plus the Sources of direct one-hop shares into families the user is
+    /// an Owner of. Share grants apply to target-family Owners only (not all
+    /// target members). Sharing is non-transitive — no family reached only
+    /// via a chain of connections is ever included.
     /// </summary>
     public async Task<IReadOnlyCollection<string>> GetVisiblePersonIdsAsync(string userId)
     {
