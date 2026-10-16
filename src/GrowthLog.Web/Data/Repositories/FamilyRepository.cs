@@ -91,6 +91,26 @@ public class FamilyRepository
             .ToList();
     }
 
+    /// <summary>
+    /// Returns the user's default family ID, but only if that family is still
+    /// visible to them (not soft-deleted, and still a membership or a valid
+    /// share). Returns null when the stored DefaultFamilyId points at a
+    /// deleted or otherwise invisible family, so callers can fall back to
+    /// another visible family.
+    /// </summary>
+    public async Task<string?> GetValidDefaultFamilyIdAsync(string userId)
+    {
+        using var connection = _factory.Create();
+        var defaultId = await connection.QuerySingleOrDefaultAsync<string?>(
+            "SELECT DefaultFamilyId FROM AspNetUsers WHERE Id = @UserId",
+            new { UserId = userId });
+
+        if (string.IsNullOrEmpty(defaultId)) return null;
+
+        var visible = await GetVisibleForUserAsync(userId);
+        return visible.Any(f => f.Id == defaultId) ? defaultId : null;
+    }
+
     public async Task<string> CreateAsync(string name, string ownerUserId)
     {
         using var connection = _factory.Create();

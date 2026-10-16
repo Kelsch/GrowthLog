@@ -80,9 +80,15 @@ public class FamilyVisibilityService
         using var connection = _factory.Create();
 
         // Step 1: membership families. Direct membership only — no closure.
+        // Soft-deleted families are excluded here so they can never appear as
+        // a chip, and so their people/measurements are excluded downstream
+        // (GetVisiblePersonIdsAsync derives its family set from this map).
         var memberFamilyIds = (await connection.QueryAsync<string>("""
             SELECT fm.FamilyId
             FROM FamilyMemberships fm
+            JOIN Families f
+                ON f.Id = fm.FamilyId
+               AND f.IsDeleted = 0
             WHERE fm.UserId = @UserId
             """,
             new { UserId = userId })).ToList();
@@ -106,6 +112,16 @@ public class FamilyVisibilityService
                 MAX(CASE WHEN sp.PermissionKind = 'ViewAdults'   AND sp.IsGranted = 1 THEN 1 ELSE 0 END) AS ViewAdults,
                 MAX(CASE WHEN sp.PermissionKind = 'ViewChildren' AND sp.IsGranted = 1 THEN 1 ELSE 0 END) AS ViewChildren
             FROM FamilyConnections c
+            -- The Source family must not be soft-deleted: a deleted family's
+            -- data must never be visible via sharing.
+            JOIN Families src
+                ON src.Id = c.SourceFamilyId
+               AND src.IsDeleted = 0
+            -- The Target family must not be soft-deleted either: a share into
+            -- a deleted family grants nothing.
+            JOIN Families tgt
+                ON tgt.Id = c.TargetFamilyId
+               AND tgt.IsDeleted = 0
             JOIN FamilyMemberships fm
                 ON fm.FamilyId = c.TargetFamilyId
                AND fm.UserId = @UserId
@@ -168,12 +184,18 @@ public class FamilyVisibilityService
 
         // Step 4: people in access-map families (membership ∪ direct-share
         // sources). No transitive families are in map.Keys by construction.
+        // The Families join is belt-and-braces: map.Keys already excludes
+        // soft-deleted families, but this guarantees a deleted family's
+        // people can never leak even if the map were ever built differently.
         var rows = (await connection.QueryAsync<PersonRow>("""
             SELECT p.Id, pfm.FamilyId, pfm.MembershipKind
             FROM People p
             JOIN PersonFamilyMembership pfm
                 ON pfm.PersonId = p.Id
                AND pfm.IsActive = 1
+            JOIN Families f
+                ON f.Id = pfm.FamilyId
+               AND f.IsDeleted = 0
             WHERE p.IsDeleted = 0
               AND pfm.FamilyId IN @FamilyIds
             """,
