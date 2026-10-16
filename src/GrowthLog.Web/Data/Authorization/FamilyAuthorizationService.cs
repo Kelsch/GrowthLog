@@ -136,48 +136,46 @@ public class FamilyAuthorizationService
     ///       by the user. This keeps orphaned/unassigned people reachable
     ///       without making their family visible on the chips.
     /// </summary>
-    public const string VisiblePeopleSql = """
-        SELECT DISTINCT p.Id
-        FROM People p
-        JOIN PersonFamilyMembership pfm
-            ON pfm.PersonId = p.Id
-           AND pfm.IsActive = 1
-        WHERE p.IsDeleted = 0
-          AND pfm.FamilyId IN (""" + VisibleFamilyIdsSql + """
-          )
-          AND (
-                -- (a) The user is a member of this family: membership sees
-                --     the family normally, no kind restriction.
-                EXISTS (
-                    SELECT 1 FROM FamilyMemberships mine
-                    WHERE mine.FamilyId = pfm.FamilyId
-                      AND mine.UserId = @UserId
-                )
-                -- (b) Access is via sharing only: apply the kind filter.
-                OR EXISTS (
-                    SELECT 1
-                    FROM FamilyConnections c
-                    JOIN FamilyMemberships fm
-                        ON fm.FamilyId = c.TargetFamilyId
-                       AND fm.UserId = @UserId
-                    JOIN SharingPermissions sp
-                        ON sp.FamilyConnectionId = c.Id
-                       AND sp.IsGranted = 1
-                    WHERE c.SourceFamilyId = pfm.FamilyId
-                      AND c.IsActive = 1
-                      AND (
-                            sp.PermissionKind = 'ViewAll'
-                         OR (sp.PermissionKind = 'ViewChildren' AND pfm.MembershipKind = 'Child')
-                         OR (sp.PermissionKind = 'ViewAdults'   AND pfm.MembershipKind = 'Adult')
-                      )
-                )
-                -- (c) Orphan safety net: the person is linked to the user's
-                --     account or was created by the user. This does NOT make
-                --     the family visible on the chips.
-                OR p.UserId = @UserId
-                OR p.CreatedByUserId = @UserId
-          )
-        """;
+    public const string VisiblePeopleSql =
+        "SELECT DISTINCT p.Id " +
+        "FROM People p " +
+        "JOIN PersonFamilyMembership pfm " +
+        "    ON pfm.PersonId = p.Id " +
+        "   AND pfm.IsActive = 1 " +
+        "WHERE p.IsDeleted = 0 " +
+        "  AND pfm.FamilyId IN (" + VisibleFamilyIdsSql + ") " +
+        "  AND ( " +
+        "        -- (a) The user is a member of this family: membership sees " +
+        "        --     the family normally, no kind restriction. " +
+        "        EXISTS ( " +
+        "            SELECT 1 FROM FamilyMemberships mine " +
+        "            WHERE mine.FamilyId = pfm.FamilyId " +
+        "              AND mine.UserId = @UserId " +
+        "        ) " +
+        "        -- (b) Access is via sharing only: apply the kind filter. " +
+        "        OR EXISTS ( " +
+        "            SELECT 1 " +
+        "            FROM FamilyConnections c " +
+        "            JOIN FamilyMemberships fm " +
+        "                ON fm.FamilyId = c.TargetFamilyId " +
+        "               AND fm.UserId = @UserId " +
+        "            JOIN SharingPermissions sp " +
+        "                ON sp.FamilyConnectionId = c.Id " +
+        "               AND sp.IsGranted = 1 " +
+        "            WHERE c.SourceFamilyId = pfm.FamilyId " +
+        "              AND c.IsActive = 1 " +
+        "              AND ( " +
+        "                    sp.PermissionKind = 'ViewAll' " +
+        "                 OR (sp.PermissionKind = 'ViewChildren' AND pfm.MembershipKind = 'Child') " +
+        "                 OR (sp.PermissionKind = 'ViewAdults'   AND pfm.MembershipKind = 'Adult') " +
+        "              ) " +
+        "        ) " +
+        "        -- (c) Orphan safety net: the person is linked to the user's " +
+        "        --     account or was created by the user. This does NOT make " +
+        "        --     the family visible on the chips. " +
+        "        OR p.UserId = @UserId " +
+        "        OR p.CreatedByUserId = @UserId " +
+        "  )";
 
     public async Task<bool> CanViewPersonAsync(string userId, string personId)
     {
