@@ -143,7 +143,7 @@ public class FamilyAuthorizationService
         "    ON pfm.PersonId = p.Id " +
         "   AND pfm.IsActive = 1 " +
         "WHERE p.IsDeleted = 0 " +
-        "  AND pfm.FamilyId IN (" + VisibleFamilyIdsSql + ") " +
+        "  AND pfm.FamilyId IN (SELECT vfid.FamilyId FROM (" + VisibleFamilyIdsSql + ") vfid) " +
         "  AND ( " +
         "        -- (a) The user is a member of this family: membership sees " +
         "        --     the family normally, no kind restriction. " +
@@ -175,7 +175,7 @@ public class FamilyAuthorizationService
         "        --     the family visible on the chips. " +
         "        OR p.UserId = @UserId " +
         "        OR p.CreatedByUserId = @UserId " +
-        "  ) ";
+        "  )\n";
 
     public async Task<bool> CanViewPersonAsync(string userId, string personId)
     {
